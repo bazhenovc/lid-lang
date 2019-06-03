@@ -24,7 +24,7 @@ In no particular order:
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
 function main(): i32 {
     puts("Hello World")
@@ -99,7 +99,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
     extern function rand(): i32
     extern function sinf(:f32): f32
     extern function cosf(:f32): f32
@@ -117,7 +117,7 @@ function main(): i32 {
 ### Declaring constants and functions
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     const StringConstant = "This is a string constant"
     const FloatConstant = 3.14
@@ -152,7 +152,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestLambda(:i128): f32 {
         (function(): f32 {
@@ -206,7 +206,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function LambdaArgument(x: function(value: i32): void): void {
         x(128)
@@ -242,7 +242,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestScope(): u32 {
         let x = 42 {
@@ -294,7 +294,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestIf(): void {
         if 0 {
@@ -388,7 +388,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestScopeMutable(): void {
         let x: i32 #mutable = 0 {
@@ -461,7 +461,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestTypeCast(): void {
         let typedConstant: i8 = 255 {
@@ -504,7 +504,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     function TestForLoop(): void {
         let loopResult = for (x: i16 = 0; (x < 4); (x + 1)) { puts("Loop iteration") x } {
@@ -562,7 +562,7 @@ function main(): i32 {
 
 <table>
 <tr>
-<td><pre lang="javacript">
+<td><pre lang="JavaScript">
 
     struct Vector3i {
         x: i32 = 0
