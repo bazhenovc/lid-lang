@@ -196,6 +196,7 @@ antlrcpp::Any ModuleBuilder::visitExpression(lidParser::ExpressionContext* conte
     lidParser::BranchContext* branch = context->branch();
     lidParser::LoopContext* loop = context->loop();
     lidParser::BinaryContext* binary = context->binary();
+    lidParser::UnaryContext* unary = context->unary();
     //lidParser::ExpressionContext* expression = context->expression();
 
     if (constant != nullptr) {
@@ -214,6 +215,8 @@ antlrcpp::Any ModuleBuilder::visitExpression(lidParser::ExpressionContext* conte
         return visitLoop(loop);
     } else if (binary != nullptr) {
         return visitBinary(binary);
+    } else if (unary != nullptr) {
+        return visitUnary(unary);
     }
     //else if (expression != nullptr) {
     //    return visitExpression(expression);
@@ -544,6 +547,25 @@ antlrcpp::Any ModuleBuilder::visitBinary(lidParser::BinaryContext* context)
 }
 
 antlrcpp::Any ModuleBuilder::visitBinaryOperator(lidParser::BinaryOperatorContext* context)
+{
+    (void)(context);
+    assert(false && "Should not be called directly");
+    return nullptr;
+}
+
+antlrcpp::Any ModuleBuilder::visitUnary(lidParser::UnaryContext *context)
+{
+    AST::SourceParseContext parseContext = { CopyString(context->unaryOperator()->getStart()),
+                                             context->unaryOperator()->getStart()->getLine() };
+
+    auto rhs = std::move(visitExpression(context->expression()).as<AST::BaseExpressionPtr>());
+
+    AST::BaseExpressionPtr unaryOperatorExpr = std::make_unique<AST::UnaryOperatorExpression>(
+                parseContext, std::move(rhs));
+    return std::move(unaryOperatorExpr);
+}
+
+antlrcpp::Any ModuleBuilder::visitUnaryOperator(lidParser::UnaryOperatorContext *context)
 {
     (void)(context);
     assert(false && "Should not be called directly");

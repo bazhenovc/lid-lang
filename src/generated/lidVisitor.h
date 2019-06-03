@@ -77,6 +77,10 @@ public:
 
     virtual antlrcpp::Any visitBinaryOperator(lidParser::BinaryOperatorContext *context) = 0;
 
+    virtual antlrcpp::Any visitUnary(lidParser::UnaryContext *context) = 0;
+
+    virtual antlrcpp::Any visitUnaryOperator(lidParser::UnaryOperatorContext *context) = 0;
+
 
 };
 

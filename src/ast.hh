@@ -135,6 +135,18 @@ namespace AST
         virtual void DebugPrint(int indent) override;
     };
 
+    struct UnaryOperatorExpression : public BaseExpression
+    {
+        std::string_view    Operator;
+        BaseExpressionPtr   RHS;
+
+        UnaryOperatorExpression(SourceParseContext parseContext,
+                                BaseExpressionPtr&& rhs);
+
+        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual void DebugPrint(int indent) override;
+    };
+
     struct FunctionExpression : public BaseExpression
     {
         struct FunctionType

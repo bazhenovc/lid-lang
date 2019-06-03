@@ -37,6 +37,7 @@ expression
     | branch
     | loop
     | binary
+    | unary
     ;
 
 constant
@@ -130,6 +131,14 @@ binaryOperator
     : '+'|'-'|'*'|'/'
     | '=='|'>'|'<'
     | '~='|'>='|'<='
+    ;
+
+unary
+    : unaryOperator expression
+    ;
+
+unaryOperator
+    : '+'|'-'
     ;
 
 WHITESPACE

@@ -16,9 +16,8 @@ public:
     T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, T__12 = 13, T__13 = 14, 
     T__14 = 15, T__15 = 16, T__16 = 17, T__17 = 18, T__18 = 19, T__19 = 20, 
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
-    T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, WHITESPACE = 31, POINTER_PREFIX = 32, 
-    IDENTIFIER = 33, FLOAT_LITERAL = 34, INTEGER_LITERAL = 35, STRING_LITERAL = 36, 
-    LINE_COMMENT = 37
+    T__26 = 27, T__27 = 28, WHITESPACE = 29, POINTER_PREFIX = 30, IDENTIFIER = 31, 
+    FLOAT_LITERAL = 32, INTEGER_LITERAL = 33, STRING_LITERAL = 34, LINE_COMMENT = 35
   };
 
   enum {
@@ -29,7 +28,7 @@ public:
     RuleTypeName = 16, RuleRegularTypeName = 17, RuleFunctionTypeName = 18, 
     RuleSet = 19, RuleBranch = 20, RuleBranchCondition = 21, RuleBranchBegin = 22, 
     RuleBranchItem = 23, RuleBranchEnd = 24, RuleLoop = 25, RuleLoopBindingExpression = 26, 
-    RuleBinary = 27, RuleBinaryOperator = 28
+    RuleBinary = 27, RuleBinaryOperator = 28, RuleUnary = 29, RuleUnaryOperator = 30
   };
 
   lidParser(antlr4::TokenStream *input);
@@ -70,7 +69,9 @@ public:
   class LoopContext;
   class LoopBindingExpressionContext;
   class BinaryContext;
-  class BinaryOperatorContext; 
+  class BinaryOperatorContext;
+  class UnaryContext;
+  class UnaryOperatorContext; 
 
   class  ProgramContext : public antlr4::ParserRuleContext {
   public:
@@ -176,6 +177,7 @@ public:
     BranchContext *branch();
     LoopContext *loop();
     BinaryContext *binary();
+    UnaryContext *unary();
 
 
     virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -506,6 +508,32 @@ public:
   };
 
   BinaryOperatorContext* binaryOperator();
+
+  class  UnaryContext : public antlr4::ParserRuleContext {
+  public:
+    UnaryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    UnaryOperatorContext *unaryOperator();
+    ExpressionContext *expression();
+
+
+    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  UnaryContext* unary();
+
+  class  UnaryOperatorContext : public antlr4::ParserRuleContext {
+  public:
+    UnaryOperatorContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+
+
+    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  UnaryOperatorContext* unaryOperator();
 
 
 private:

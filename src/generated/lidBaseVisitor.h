@@ -131,6 +131,14 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual antlrcpp::Any visitUnary(lidParser::UnaryContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual antlrcpp::Any visitUnaryOperator(lidParser::UnaryOperatorContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
 
 };
 

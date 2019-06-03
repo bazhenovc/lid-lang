@@ -284,6 +284,52 @@ namespace AST
     }
 
     //-----------------------------------------------------------------------------------------------------------------
+    // UnaryOperator
+
+    UnaryOperatorExpression::UnaryOperatorExpression(SourceParseContext parseContext,
+                                                     BaseExpressionPtr&& rhs)
+        : BaseExpression(parseContext)
+        , Operator(parseContext.Source)
+    {
+        RHS = std::move(rhs);
+    }
+
+    llvm::Value* UnaryOperatorExpression::Generate(CodeGenContext &cc)
+    {
+        llvm::Value* rhs = RHS->Generate(cc);
+
+        if (false) {}
+
+        // Arithmetics
+        else if (Operator == "+") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else {
+                return rhs;
+            }
+        } else if (Operator == "-") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else if (rhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateNeg(rhs);
+            } else if (rhs->getType()->isFloatingPointTy()) {
+                return cc.Builder->CreateFNeg(rhs);
+            }
+        }
+
+        Assert(false, "Unexpected unary operator");
+        return nullptr;
+    }
+
+    void UnaryOperatorExpression::DebugPrint(int indent)
+    {
+        BaseExpression::DebugPrint(indent);
+        RHS->DebugPrint(indent + 1);
+    }
+
+    //-----------------------------------------------------------------------------------------------------------------
     // FunctionDecl
     FunctionExpression::FunctionExpression(SourceParseContext context, FunctionType &&type,
                                        std::vector<BaseExpressionPtr>&& body)

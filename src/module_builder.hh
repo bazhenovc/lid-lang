@@ -131,6 +131,10 @@ public:
 
     virtual antlrcpp::Any visitBinaryOperator(lidParser::BinaryOperatorContext *context) override;
 
+    virtual antlrcpp::Any visitUnary(lidParser::UnaryContext *context) override;
+
+    virtual antlrcpp::Any visitUnaryOperator(lidParser::UnaryOperatorContext *context) override;
+
 private:
 
     std::list<std::string> mCopiedStrings; // TODO: Refactor this
