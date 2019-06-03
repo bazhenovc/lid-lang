@@ -133,11 +133,11 @@ function TestFloatBinaryOperators(): void {
     if (7.0 <= 7.0)     { puts("7.0 equals or lesser than 7.0") }  else { puts("float lesser-equals operator failed") }
 }
 
-const TestValue = 42
-
 function TestIntegerUnaryOperators(): void {
-    if (-TestValue == -42)  { puts("Unary operator test passed") }
-    else                    { puts("Unary operator test failed") }
+    let TestValue = 42 {
+        if (-TestValue == -42)  { puts("Unary operator test passed") }
+        else                    { puts("Unary operator test failed") }
+    }
 }
 
 function TestTypeCast(): void {
