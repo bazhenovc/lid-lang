@@ -26,27 +26,27 @@ In no particular order:
 <tr>
 <td><pre lang="javacript">
 
-function main(): i32 {
-    puts("Hello World")
-    puts(StringConstant)
-    TestLambda(5431231)
-    TestScope()
-    TestScopeLambda()
-    TestLambdaAsArgument()
-    TestScopeMutable()
-    TestIf()
-    TestIfElse()
-    TestIntegerBinaryOperators()
-    TestFloatBinaryOperators()
-    TestTypeCast()
-    TestForLoop()
-    TestStructMembers()
-    TestNestedStruct()
+    function main(): i32 {
+        puts("Hello World")
+        puts(StringConstant)
+        TestLambda(5431231)
+        TestScope()
+        TestScopeLambda()
+        TestLambdaAsArgument()
+        TestScopeMutable()
+        TestIf()
+        TestIfElse()
+        TestIntegerBinaryOperators()
+        TestFloatBinaryOperators()
+        TestTypeCast()
+        TestForLoop()
+        TestStructMembers()
+        TestNestedStruct()
 
-    let x = rand() {
-        x
+        let x = rand() {
+            x
+        }
     }
-}
 
 </pre></td>
 <td><pre>
