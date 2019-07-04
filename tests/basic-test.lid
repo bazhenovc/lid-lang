@@ -112,7 +112,7 @@ function TestIfElse(): void {
 function TestIntegerBinaryOperators(): void {
     puts("Testing integer binary operators")
     if (5 == 5)         { puts("5 equals 5") }                 else { puts("integer equality operator failed") }
-    if (1 ~= 5)         { puts("1 not-equals 5") }             else { puts("integer not-equality operator failed") }
+    if (1 != 5)         { puts("1 not-equals 5") }             else { puts("integer not-equality operator failed") }
     if (9 >  3)         { puts("9 is greater than 3") }        else { puts("integer greater-than operator failed") }
     if (2 <  4)         { puts("2 is lesser than 4") }         else { puts("integer lesser-than operator failed") }
     if (7 >= 5)         { puts("7 equals or greater than 5") } else { puts("integer greater-equals operator failed") }
@@ -124,7 +124,7 @@ function TestIntegerBinaryOperators(): void {
 function TestFloatBinaryOperators(): void {
     puts("Testing floating-point binary operators")
     if (5.0 == 5.0)     { puts("5.0 equals 5.0") }                 else { puts("float equality operator failed") }
-    if (1.8 ~= 5.14)    { puts("1.8 not-equals 5.14") }            else { puts("float not-equality operator failed") }
+    if (1.8 != 5.14)    { puts("1.8 not-equals 5.14") }            else { puts("float not-equality operator failed") }
     if (9.2 >  3.3)     { puts("9.2 is greater than 3.3") }        else { puts("float greater-than operator failed") }
     if (2.2 <  4.1)     { puts("2.2 is lesser than 4.1") }         else { puts("float lesser-than operator failed") }
     if (7.1 >= 5.2)     { puts("7.1 equals or greater than 5.2") } else { puts("float greater-equals operator failed") }

@@ -117,6 +117,7 @@ namespace AST
 
         llvm::Type* ResolveType(ExpressionType type, const GeneratedScope& scope);
         llvm::Value* GenerateSafeTypeCast(llvm::Value* value, llvm::Type* desiredType);
+        llvm::Value* GenerateBoolean(CodeGenContext& cc, llvm::Value* value);
 
         // Debug printing
         virtual void DebugPrint(int indent);
