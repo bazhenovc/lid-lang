@@ -3,3 +3,4 @@ external/*
 build/*
 *.sublime-project
 *.sublime-workspace
+*.autosave

@@ -29,28 +29,44 @@ structMember
     ;
 
 expression
-    : constant
-    | callable
+    : callable
+    | symbol
     | lambda
     | let
     | set
     | branch
     | loop
-    | binary
-    | unary
+
+    | unaryOperator=('+'|'-') expression
+    | unaryOperator=('~'|'!') expression
+    //| expression postfix=('++' | '--')
+
+    | expression binaryOperator=('*'|'/'|'%') expression
+    | expression binaryOperator=('+'|'-') expression
+    | expression binaryOperator=('<='|'>='|'>'|'<') expression
+    | expression binaryOperator=('=='|'!=') expression
+    | expression binaryOperator='&' expression
+    | expression binaryOperator='^' expression
+    | expression binaryOperator='|' expression
+    | expression binaryOperator='&&' expression
+    | expression binaryOperator='||' expression
+
+    //| expression ternaryOperator='?' expression ':' expression
+
+    | nestedExpression='(' expression ')'
     ;
 
-constant
-    : symbolReference | FLOAT_LITERAL | INTEGER_LITERAL | STRING_LITERAL
-    ;
-
-symbolReference
+symbolName
     : IDENTIFIER ('.' IDENTIFIER)*
     ;
 
 callable
-    : symbolReference '(' parameter? (',' parameter)* ')'
+    : symbolName '(' parameter? (',' parameter)* ')'
     | '(' expression ')' '(' parameter? (',' parameter)* ')'
+    ;
+
+symbol
+    : symbolName | FLOAT_LITERAL | INTEGER_LITERAL | STRING_LITERAL
     ;
 
 parameter
@@ -92,7 +108,7 @@ functionTypeName
     ;
 
 set
-    : symbolReference '=' expression
+    : symbolName '=' expression
     ;
 
 branch
@@ -121,28 +137,6 @@ loop
 
 loopBindingExpression
     : '(' IDENTIFIER typeName? '=' expression ';' expression ';' expression ')'
-    ;
-
-binary
-    : '(' expression binaryOperator expression ')'
-    ;
-
-binaryOperator
-    : '+'|'-'|'*'|'/'
-    | '&' | '|' | '^'
-    | '=='|'>'|'<'
-    | '!='|'>='|'<='
-    | '&&' | '||'
-    ;
-
-unary
-    : unaryOperator expression
-    ;
-
-unaryOperator
-    : '+'|'-'
-    | '~'
-    | '!'
     ;
 
 WHITESPACE

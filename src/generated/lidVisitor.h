@@ -33,11 +33,11 @@ public:
 
     virtual antlrcpp::Any visitExpression(lidParser::ExpressionContext *context) = 0;
 
-    virtual antlrcpp::Any visitConstant(lidParser::ConstantContext *context) = 0;
-
-    virtual antlrcpp::Any visitSymbolReference(lidParser::SymbolReferenceContext *context) = 0;
+    virtual antlrcpp::Any visitSymbolName(lidParser::SymbolNameContext *context) = 0;
 
     virtual antlrcpp::Any visitCallable(lidParser::CallableContext *context) = 0;
+
+    virtual antlrcpp::Any visitSymbol(lidParser::SymbolContext *context) = 0;
 
     virtual antlrcpp::Any visitParameter(lidParser::ParameterContext *context) = 0;
 
@@ -72,14 +72,6 @@ public:
     virtual antlrcpp::Any visitLoop(lidParser::LoopContext *context) = 0;
 
     virtual antlrcpp::Any visitLoopBindingExpression(lidParser::LoopBindingExpressionContext *context) = 0;
-
-    virtual antlrcpp::Any visitBinary(lidParser::BinaryContext *context) = 0;
-
-    virtual antlrcpp::Any visitBinaryOperator(lidParser::BinaryOperatorContext *context) = 0;
-
-    virtual antlrcpp::Any visitUnary(lidParser::UnaryContext *context) = 0;
-
-    virtual antlrcpp::Any visitUnaryOperator(lidParser::UnaryOperatorContext *context) = 0;
 
 
 };

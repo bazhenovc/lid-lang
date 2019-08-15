@@ -31,7 +31,7 @@ const StringConstant = "This is a string constant"
 const FloatConstant = 3.14
 
 const NamedLambda = function(): f32 {
-    (FloatConstant + 2)
+    FloatConstant + 2
 }
 
 function GetFloat(): f32 {
@@ -55,8 +55,8 @@ function LambdaArgument(x: function(value: i32): void): void {
 
 function TestLambdaAsArgument(): void {
     LambdaArgument(function(value: i32): void {
-        if (value == 128) { puts("Lambda as argument test passed") }
-        else              { puts("Lambda as argument test failed") }
+        if value == 128 { puts("Lambda as argument test passed") }
+        else            { puts("Lambda as argument test failed") }
     })
 }
 
@@ -76,13 +76,13 @@ function TestScopeLambda(): i32 {
 
 function TestScopeMutable(): void {
     let x: i32 #mutable = 0 {
-        if (x == 0) {
+        if x == 0 {
             puts("Mutable test passed")
         } else {
             puts("Mutable test failed")
         }
-        x = (x + 42)
-        if (x == 42) {
+        x = x + 42
+        if x == 42 {
             puts("Mutable test passed")
         } else {
             puts("Mutable test failed")
@@ -135,14 +135,21 @@ function TestFloatBinaryOperators(): void {
 
 function TestIntegerUnaryOperators(): void {
     let TestValue = 42 {
-        if (-TestValue == -42)  { puts("Unary operator test passed") }
-        else                    { puts("Unary operator test failed") }
+        if -TestValue == -42 { puts("Unary operator test passed") }
+        else                 { puts("Unary operator test failed") }
+    }
+}
+
+function TestBinaryOperatorPrecedence(): void {
+    let TestValue = 1 + 2 * 3 + 4 - (2 / 2 + 0) {
+        if TestValue == 10 { puts("Binary operator precedence test passed") }
+        else               { puts("Binary operator precedence test failed") }
     }
 }
 
 function TestTypeCast(): void {
     let typedConstant: i8 = 255 {
-        if (typedConstant == -127) {
+        if typedConstant == -127 {
             puts("Type cast test passed")
         } else {
             puts("Type cast test failed")
@@ -151,7 +158,7 @@ function TestTypeCast(): void {
 }
 
 function TestForLoop(): void {
-    let loopResult = for (x: i16 = 0; (x < 4); (x + 1)) { puts("Loop iteration") x } {
+    let loopResult = for (x: i16 = 0; x < 4; x + 1) { puts("Loop iteration") x } {
         if (loopResult == 3) {
             puts("Loop test passed")
         } else {
@@ -180,13 +187,13 @@ function TestStructMembers(): void {
         vec.x = 4
         vec.y = 5
         vec.z = 6
-        if ((vec.x + (vec.y + vec.z)) == 15) {
+        if vec.x + vec.y + vec.z == 15 {
             puts("Mutable struct test passed")
         } else {
             puts("Mutable struct test failed")
         }
         vec = Vector3i(7, 8, 9)
-        if ((vec.x + (vec.y + vec.z)) == 24) {
+        if vec.x + vec.y + vec.z == 24 {
             puts("Mutable struct test passed")
         } else {
             puts("Mutable struct test failed")
@@ -201,14 +208,14 @@ struct NestedStruct {
 
 function TestNestedStruct(): void {
     let x = NestedStruct(Vector3i(1, 2, 3), Vector3i(4, 5, 6)) {
-        if ((x.offset.x + x.scale.z) == 7) {
+        if x.offset.x + x.scale.z == 7 {
             puts("Nested struct test passed")
         } else {
             puts("Nested struct test failed")
         }
         x.offset.x = 5
         x.scale.z = 5
-        if ((x.offset.x + x.scale.z) == 10) {
+        if x.offset.x + x.scale.z == 10 {
             puts("Mutable nested struct test passed")
         } else {
             puts("Mutable nested struct test failed")
@@ -230,6 +237,7 @@ function main(): i32 {
     TestIntegerBinaryOperators()
     TestFloatBinaryOperators()
     TestIntegerUnaryOperators()
+    TestBinaryOperatorPrecedence()
     TestTypeCast()
     TestForLoop()
     TestStructMembers()
