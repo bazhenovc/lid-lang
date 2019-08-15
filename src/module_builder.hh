@@ -87,9 +87,9 @@ public:
 
     virtual antlrcpp::Any visitExpression(lidParser::ExpressionContext *context) override;
 
-    virtual antlrcpp::Any visitConstant(lidParser::ConstantContext *context) override;
+    virtual antlrcpp::Any visitSymbol(lidParser::SymbolContext *context) override;
 
-    virtual antlrcpp::Any visitSymbolReference(lidParser::SymbolReferenceContext *context) override;
+    virtual antlrcpp::Any visitSymbolName(lidParser::SymbolNameContext *context) override;
 
     virtual antlrcpp::Any visitCallable(lidParser::CallableContext *context) override;
 
@@ -126,10 +126,6 @@ public:
     virtual antlrcpp::Any visitLoop(lidParser::LoopContext *context) override;
 
     virtual antlrcpp::Any visitLoopBindingExpression(lidParser::LoopBindingExpressionContext *context) override;
-
-    virtual antlrcpp::Any visitBinary(lidParser::BinaryContext *context) override;
-
-    virtual antlrcpp::Any visitBinaryOperator(lidParser::BinaryOperatorContext *context) override;
 
 private:
 

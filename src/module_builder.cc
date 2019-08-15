@@ -188,20 +188,19 @@ antlrcpp::Any ModuleBuilder::visitStructMember(lidParser::StructMemberContext* c
 
 antlrcpp::Any ModuleBuilder::visitExpression(lidParser::ExpressionContext* context)
 {
-    lidParser::ConstantContext* constant = context->constant();
     lidParser::CallableContext* callable = context->callable();
+    lidParser::SymbolContext* symbol = context->symbol();
     lidParser::LambdaContext* lambda = context->lambda();
     lidParser::LetContext* let = context->let();
     lidParser::SetContext* set = context->set();
     lidParser::BranchContext* branch = context->branch();
     lidParser::LoopContext* loop = context->loop();
-    lidParser::BinaryContext* binary = context->binary();
-    //lidParser::ExpressionContext* expression = context->expression();
 
-    if (constant != nullptr) {
-        return visitConstant(constant);
-    } else if (callable != nullptr) {
+    // Parse general stuff
+    if (callable != nullptr) {
         return visitCallable(callable);
+    } else if (symbol != nullptr) {
+        return visitSymbol(symbol);
     } else if (lambda != nullptr) {
         return visitLambda(lambda);
     } else if (let != nullptr) {
@@ -212,27 +211,50 @@ antlrcpp::Any ModuleBuilder::visitExpression(lidParser::ExpressionContext* conte
         return visitBranch(branch);
     } else if (loop != nullptr) {
         return visitLoop(loop);
-    } else if (binary != nullptr) {
-        return visitBinary(binary);
     }
-    //else if (expression != nullptr) {
-    //    return visitExpression(expression);
-    //}
+
+    // Parse binary operator
+    if (context->binaryOperator != nullptr) {
+        AST::SourceParseContext parseContext = { CopyString(context->binaryOperator), context->binaryOperator->getLine() };
+
+        auto lhs = std::move(visitExpression(context->expression(0)).as<AST::BaseExpressionPtr>());
+        auto rhs = std::move(visitExpression(context->expression(1)).as<AST::BaseExpressionPtr>());
+
+        AST::BaseExpressionPtr binaryOperatorExpr = std::make_unique<AST::BinaryOperatorExpression>(
+                    parseContext, std::move(lhs), std::move(rhs));
+        return std::move(binaryOperatorExpr);
+    }
+
+    // Parse unary operator
+    if (context->unaryOperator != nullptr) {
+        AST::SourceParseContext parseContext = { CopyString(context->unaryOperator), context->unaryOperator->getLine() };
+
+        auto rhs = std::move(visitExpression(context->expression(0)).as<AST::BaseExpressionPtr>());
+
+        AST::BaseExpressionPtr unaryOperatorExpr = std::make_unique<AST::UnaryOperatorExpression>(
+                    parseContext, std::move(rhs));
+        return std::move(unaryOperatorExpr);
+    }
+
+    // Parse nested expression
+    if (context->nestedExpression != nullptr) {
+        return visitExpression(context->expression(0));
+    }
 
     assert(false && "Internal parser error, unreachable code reached");
     return nullptr;
 }
 
-antlrcpp::Any ModuleBuilder::visitConstant(lidParser::ConstantContext* context)
+antlrcpp::Any ModuleBuilder::visitSymbol(lidParser::SymbolContext* context)
 {
-    auto symbol = context->symbolReference();
+    auto symbol = context->symbolName();
     auto floatLiteral = context->FLOAT_LITERAL();
     auto integerLiteral = context->INTEGER_LITERAL();
     auto stringLiteral = context->STRING_LITERAL();
 
     AST::BaseExpressionPtr expr;
     if (symbol != nullptr) {
-        expr = std::move(visitSymbolReference(symbol).as<AST::BaseExpressionPtr>());
+        expr = std::move(visitSymbolName(symbol).as<AST::BaseExpressionPtr>());
     } else if (floatLiteral != nullptr) {
         AST::SourceParseContext parseContext = { CopyString(floatLiteral), context->getStart()->getLine() };
         expr = std::make_unique<AST::LiteralExpression>(parseContext, AST::LiteralExpression::Float);
@@ -256,7 +278,7 @@ antlrcpp::Any ModuleBuilder::visitConstant(lidParser::ConstantContext* context)
     return std::move(expr);
 }
 
-antlrcpp::Any ModuleBuilder::visitSymbolReference(lidParser::SymbolReferenceContext* context)
+antlrcpp::Any ModuleBuilder::visitSymbolName(lidParser::SymbolNameContext* context)
 {
     AST::SourceParseContext parseContext = { CopyString(context), context->getStart()->getLine() };
     AST::BaseExpressionPtr expr = std::make_unique<AST::ValueExpression>(parseContext, true);
@@ -265,7 +287,7 @@ antlrcpp::Any ModuleBuilder::visitSymbolReference(lidParser::SymbolReferenceCont
 
 antlrcpp::Any ModuleBuilder::visitCallable(lidParser::CallableContext* context)
 {
-    lidParser::SymbolReferenceContext* functionSymbol = context->symbolReference();
+    lidParser::SymbolNameContext* functionSymbol = context->symbolName();
     lidParser::ExpressionContext* functionExpression = context->expression();
 
     AST::SourceParseContext parseContext;
@@ -276,7 +298,7 @@ antlrcpp::Any ModuleBuilder::visitCallable(lidParser::CallableContext* context)
             CopyString(functionSymbol->getStart()),
             functionSymbol->getStart()->getLine()
         };
-        functionExpr = std::move(visitSymbolReference(functionSymbol).as<AST::BaseExpressionPtr>());
+        functionExpr = std::move(visitSymbolName(functionSymbol).as<AST::BaseExpressionPtr>());
     } else if (functionExpression != nullptr) {
         parseContext = {
             CopyString(functionExpression->getStart()),
@@ -432,7 +454,7 @@ antlrcpp::Any ModuleBuilder::visitFunctionTypeName(lidParser::FunctionTypeNameCo
 
 antlrcpp::Any ModuleBuilder::visitSet(lidParser::SetContext *context)
 {
-    AST::SourceParseContext valueParseContext = { CopyString(context->symbolReference()), context->getStart()->getLine() };
+    AST::SourceParseContext valueParseContext = { CopyString(context->symbolName()), context->getStart()->getLine() };
     AST::BaseExpressionPtr mutableValue = std::make_unique<AST::ValueExpression>(valueParseContext, false);
     AST::BaseExpressionPtr expression = std::move(visitExpression(context->expression()).as<AST::BaseExpressionPtr>());
 
@@ -528,24 +550,4 @@ antlrcpp::Any ModuleBuilder::visitLoopBindingExpression(lidParser::LoopBindingEx
         std::move(visitExpression(context->expression(2)).as<AST::BaseExpressionPtr>())  // body
     };
     return std::move(bindingExpression);
-}
-
-antlrcpp::Any ModuleBuilder::visitBinary(lidParser::BinaryContext* context)
-{
-    AST::SourceParseContext parseContext = { CopyString(context->binaryOperator()->getStart()),
-                                             context->binaryOperator()->getStart()->getLine() };
-
-    auto lhs = std::move(visitExpression(context->expression(0)).as<AST::BaseExpressionPtr>());
-    auto rhs = std::move(visitExpression(context->expression(1)).as<AST::BaseExpressionPtr>());
-
-    AST::BaseExpressionPtr binaryOperatorExpr = std::make_unique<AST::BinaryOperatorExpression>(
-                parseContext, std::move(lhs), std::move(rhs));
-    return std::move(binaryOperatorExpr);
-}
-
-antlrcpp::Any ModuleBuilder::visitBinaryOperator(lidParser::BinaryOperatorContext* context)
-{
-    (void)(context);
-    assert(false && "Should not be called directly");
-    return nullptr;
 }

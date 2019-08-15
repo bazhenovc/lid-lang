@@ -149,6 +149,17 @@ namespace AST
         return value;
     }
 
+    llvm::Value* BaseExpression::GenerateBoolean(CodeGenContext& cc, llvm::Value *value)
+    {
+        Assert(value->getType()->isIntegerTy(), "Boolean or integer expected");
+        llvm::IntegerType* intType = static_cast<llvm::IntegerType*>(value->getType());
+        if (intType->getBitWidth() != 1) {
+            value = cc.Builder->CreateICmpUGT(value,
+                                              llvm::ConstantInt::get(intType, llvm::APInt(intType->getBitWidth(), 0, false)));
+        }
+        return value;
+    }
+
     void BaseExpression::DebugPrint(int indent)
     {
         std::cerr << std::setfill(' ') << std::setw(indent)
@@ -216,7 +227,10 @@ namespace AST
             } else if (lhs->getType()->isFloatingPointTy()) {
                 return cc.Builder->CreateFDiv(lhs, rhs);
             }
-        } else if (Operator == "==") {
+        }
+
+        // Comparison operators
+        else if (Operator == "==") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
@@ -225,7 +239,7 @@ namespace AST
             } else if (lhs->getType()->isFloatingPointTy()) {
                 return cc.Builder->CreateFCmpOEQ(lhs, rhs); // TODO: OGT or UGT? OGT supports QNaN
             }
-        } else if (Operator == "~=") {
+        } else if (Operator == "!=") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
@@ -272,6 +286,52 @@ namespace AST
             }
         }
 
+        // Logical operators
+        else if (Operator == "&&") {
+            if (lhs->getType()->isStructTy()) {
+                Assert(false, "Overloading logical operators for structures is not yet implemented");
+            } else {
+                lhs = GenerateBoolean(cc, lhs);
+                rhs = GenerateBoolean(cc, rhs);
+                return cc.Builder->CreateAnd(lhs, rhs);
+            }
+        } else if (Operator == "||") {
+            if (lhs->getType()->isStructTy()) {
+                Assert(false, "Overloading logical operators for structures is not yet implemented");
+            } else {
+                lhs = GenerateBoolean(cc, lhs);
+                rhs = GenerateBoolean(cc, rhs);
+                return cc.Builder->CreateOr(lhs, rhs);
+            }
+        }
+
+        // Bitwise operators
+        else if (Operator == "&") {
+            if (lhs->getType()->isStructTy()) {
+                Assert(false, "Overloading bitwise operators for structures is not yet implemented");
+            } else if (lhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateAnd(lhs, rhs);
+            } else if (lhs->getType()->isFloatingPointTy()) {
+                Assert(false, "Bitwise operators not supported for floats");
+            }
+        } else if (Operator == "|") {
+            if (lhs->getType()->isStructTy()) {
+                Assert(false, "Overloading bitwise operators for structures is not yet implemented");
+            } else if (lhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateOr(lhs, rhs);
+            } else if (lhs->getType()->isFloatingPointTy()) {
+                Assert(false, "Bitwise operators not supported for floats");
+            }
+        } else if (Operator == "^") {
+            if (lhs->getType()->isStructTy()) {
+                Assert(false, "Overloading bitwise operators for structures is not yet implemented");
+            } else if (lhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateXor(lhs, rhs);
+            } else if (lhs->getType()->isFloatingPointTy()) {
+                Assert(false, "Bitwise operators not supported for floats");
+            }
+        }
+
         Assert(false, "Unexpected binary operator");
         return nullptr;
     }
@@ -280,6 +340,74 @@ namespace AST
     {
         BaseExpression::DebugPrint(indent);
         LHS->DebugPrint(indent + 1);
+        RHS->DebugPrint(indent + 1);
+    }
+
+    //-----------------------------------------------------------------------------------------------------------------
+    // UnaryOperator
+    UnaryOperatorExpression::UnaryOperatorExpression(SourceParseContext parseContext,
+                                                     BaseExpressionPtr&& rhs)
+        : BaseExpression(parseContext)
+        , Operator(parseContext.Source)
+    {
+        RHS = std::move(rhs);
+    }
+
+    llvm::Value* UnaryOperatorExpression::Generate(CodeGenContext &cc)
+    {
+        llvm::Value* rhs = RHS->Generate(cc);
+
+        if (false) {}
+
+        // Arithmetics
+        else if (Operator == "+") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else {
+                return rhs;
+            }
+        } else if (Operator == "-") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else if (rhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateNeg(rhs);
+            } else if (rhs->getType()->isFloatingPointTy()) {
+                return cc.Builder->CreateFNeg(rhs);
+            }
+        }
+
+        // Logical operators
+        else if (Operator == "!") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else {
+                rhs = GenerateBoolean(cc, rhs);
+                return cc.Builder->CreateNot(rhs);
+            }
+        }
+
+        // Bitwise operators
+        else if (Operator == "~") {
+            if (rhs->getType()->isStructTy()) {
+                // TODO: structs support
+                Assert(false, "Overloading unary operators for structures is not yet implemented");
+            } else if (rhs->getType()->isIntegerTy()) {
+                return cc.Builder->CreateNot(rhs);
+            } else if (rhs->getType()->isFloatingPointTy()) {
+                Assert(false, "Bitwise operators not supported for floats");
+            }
+        }
+
+        Assert(false, "Unexpected unary operator");
+        return nullptr;
+    }
+
+    void UnaryOperatorExpression::DebugPrint(int indent)
+    {
+        BaseExpression::DebugPrint(indent);
         RHS->DebugPrint(indent + 1);
     }
 
@@ -435,12 +563,7 @@ namespace AST
                 // Generate condition
                 if (i != generatedCondBlocks.size() && Body[i].Condition != nullptr) {
                     llvm::Value* condition = Body[i].Condition->Generate(localContext);
-                    Assert(condition->getType()->isIntegerTy(), "Boolean or integer expected");
-                    llvm::IntegerType* intType = static_cast<llvm::IntegerType*>(condition->getType());
-                    if (intType->getBitWidth() != 1) {
-                        condition = cc.Builder->CreateICmpUGT(condition,
-                                    llvm::ConstantInt::get(intType, llvm::APInt(intType->getBitWidth(), 0, false)));
-                    }
+                    condition = GenerateBoolean(cc, condition);
 
                     // Create branch
                     cc.Builder->CreateCondBr(condition, generatedBlocks[i], generatedCondBlocks[i]);

@@ -42,6 +42,9 @@
 #undef _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #pragma warning(pop)
 
+#include <chrono>
+#include <iostream>
+
 static llvm::cl::opt<std::string> SourceFile(llvm::cl::Positional,
                                              llvm::cl::desc("Input file name"),
                                              llvm::cl::init("-"));
@@ -52,6 +55,10 @@ static llvm::cl::opt<std::string> BinaryIROutput("ir-binary",
 static llvm::cl::opt<std::string> PlainTextIROutput("ir-plaintext",
                                                     llvm::cl::desc("Human readable IR output file (can use stdout)"),
                                                     llvm::cl::init(""));
+
+static llvm::cl::opt<bool> EnableProfile("enable-profile",
+                                         llvm::cl::desc("Print profiling data to stdout"),
+                                         llvm::cl::init(false));
 
 int main(int argc, char** argv)
 {
@@ -66,7 +73,14 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    std::chrono::time_point<std::chrono::steady_clock> tmStart;
+    std::chrono::time_point<std::chrono::steady_clock> tmEnd;
+
     if (inStream.good()) {
+        if (EnableProfile) {
+            tmStart = std::chrono::high_resolution_clock::now();
+        }
+
         antlr4::ANTLRInputStream inputStream(inStream);
         lidLexer lexer(&inputStream);
         antlr4::CommonTokenStream tokenStream(&lexer);
@@ -117,6 +131,12 @@ int main(int argc, char** argv)
                 std::cerr << "Failed to write binary IR: " << errorCode << std::endl;
                 return 1;
             }
+        }
+
+        if (EnableProfile) {
+            tmEnd = std::chrono::high_resolution_clock::now();
+            auto msecElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tmEnd - tmStart);
+            std::cout << "Compiled in " << msecElapsed.count() << "ms" << std::endl;
         }
     }
 

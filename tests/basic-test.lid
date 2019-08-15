@@ -31,7 +31,7 @@ const StringConstant = "This is a string constant"
 const FloatConstant = 3.14
 
 const NamedLambda = function(): f32 {
-    (FloatConstant + 2)
+    FloatConstant + 2
 }
 
 function GetFloat(): f32 {
@@ -55,8 +55,8 @@ function LambdaArgument(x: function(value: i32): void): void {
 
 function TestLambdaAsArgument(): void {
     LambdaArgument(function(value: i32): void {
-        if (value == 128) { puts("Lambda as argument test passed") }
-        else              { puts("Lambda as argument test failed") }
+        if value == 128 { puts("Lambda as argument test passed") }
+        else            { puts("Lambda as argument test failed") }
     })
 }
 
@@ -76,13 +76,13 @@ function TestScopeLambda(): i32 {
 
 function TestScopeMutable(): void {
     let x: i32 #mutable = 0 {
-        if (x == 0) {
+        if x == 0 {
             puts("Mutable test passed")
         } else {
             puts("Mutable test failed")
         }
-        x = (x + 42)
-        if (x == 42) {
+        x = x + 42
+        if x == 42 {
             puts("Mutable test passed")
         } else {
             puts("Mutable test failed")
@@ -112,7 +112,7 @@ function TestIfElse(): void {
 function TestIntegerBinaryOperators(): void {
     puts("Testing integer binary operators")
     if (5 == 5)         { puts("5 equals 5") }                 else { puts("integer equality operator failed") }
-    if (1 ~= 5)         { puts("1 not-equals 5") }             else { puts("integer not-equality operator failed") }
+    if (1 != 5)         { puts("1 not-equals 5") }             else { puts("integer not-equality operator failed") }
     if (9 >  3)         { puts("9 is greater than 3") }        else { puts("integer greater-than operator failed") }
     if (2 <  4)         { puts("2 is lesser than 4") }         else { puts("integer lesser-than operator failed") }
     if (7 >= 5)         { puts("7 equals or greater than 5") } else { puts("integer greater-equals operator failed") }
@@ -124,7 +124,7 @@ function TestIntegerBinaryOperators(): void {
 function TestFloatBinaryOperators(): void {
     puts("Testing floating-point binary operators")
     if (5.0 == 5.0)     { puts("5.0 equals 5.0") }                 else { puts("float equality operator failed") }
-    if (1.8 ~= 5.14)    { puts("1.8 not-equals 5.14") }            else { puts("float not-equality operator failed") }
+    if (1.8 != 5.14)    { puts("1.8 not-equals 5.14") }            else { puts("float not-equality operator failed") }
     if (9.2 >  3.3)     { puts("9.2 is greater than 3.3") }        else { puts("float greater-than operator failed") }
     if (2.2 <  4.1)     { puts("2.2 is lesser than 4.1") }         else { puts("float lesser-than operator failed") }
     if (7.1 >= 5.2)     { puts("7.1 equals or greater than 5.2") } else { puts("float greater-equals operator failed") }
@@ -133,9 +133,23 @@ function TestFloatBinaryOperators(): void {
     if (7.0 <= 7.0)     { puts("7.0 equals or lesser than 7.0") }  else { puts("float lesser-equals operator failed") }
 }
 
+function TestIntegerUnaryOperators(): void {
+    let TestValue = 42 {
+        if -TestValue == -42 { puts("Unary operator test passed") }
+        else                 { puts("Unary operator test failed") }
+    }
+}
+
+function TestBinaryOperatorPrecedence(): void {
+    let TestValue = 1 + 2 * 3 + 4 - (2 / 2 + 0) {
+        if TestValue == 10 { puts("Binary operator precedence test passed") }
+        else               { puts("Binary operator precedence test failed") }
+    }
+}
+
 function TestTypeCast(): void {
     let typedConstant: i8 = 255 {
-        if (typedConstant == -127) {
+        if typedConstant == -127 {
             puts("Type cast test passed")
         } else {
             puts("Type cast test failed")
@@ -144,7 +158,7 @@ function TestTypeCast(): void {
 }
 
 function TestForLoop(): void {
-    let loopResult = for (x: i16 = 0; (x < 4); (x + 1)) { puts("Loop iteration") x } {
+    let loopResult = for (x: i16 = 0; x < 4; x + 1) { puts("Loop iteration") x } {
         if (loopResult == 3) {
             puts("Loop test passed")
         } else {
@@ -173,13 +187,13 @@ function TestStructMembers(): void {
         vec.x = 4
         vec.y = 5
         vec.z = 6
-        if ((vec.x + (vec.y + vec.z)) == 15) {
+        if vec.x + vec.y + vec.z == 15 {
             puts("Mutable struct test passed")
         } else {
             puts("Mutable struct test failed")
         }
         vec = Vector3i(7, 8, 9)
-        if ((vec.x + (vec.y + vec.z)) == 24) {
+        if vec.x + vec.y + vec.z == 24 {
             puts("Mutable struct test passed")
         } else {
             puts("Mutable struct test failed")
@@ -194,14 +208,14 @@ struct NestedStruct {
 
 function TestNestedStruct(): void {
     let x = NestedStruct(Vector3i(1, 2, 3), Vector3i(4, 5, 6)) {
-        if ((x.offset.x + x.scale.z) == 7) {
+        if x.offset.x + x.scale.z == 7 {
             puts("Nested struct test passed")
         } else {
             puts("Nested struct test failed")
         }
         x.offset.x = 5
         x.scale.z = 5
-        if ((x.offset.x + x.scale.z) == 10) {
+        if x.offset.x + x.scale.z == 10 {
             puts("Mutable nested struct test passed")
         } else {
             puts("Mutable nested struct test failed")
@@ -222,6 +236,8 @@ function main(): i32 {
     TestIfElse()
     TestIntegerBinaryOperators()
     TestFloatBinaryOperators()
+    TestIntegerUnaryOperators()
+    TestBinaryOperatorPrecedence()
     TestTypeCast()
     TestForLoop()
     TestStructMembers()

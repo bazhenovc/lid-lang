@@ -1,3 +1,6 @@
 CMakeLists.txt.user*
 external/*
 build/*
+*.sublime-project
+*.sublime-workspace
+*.autosave

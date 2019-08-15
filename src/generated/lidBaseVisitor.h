@@ -43,15 +43,15 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstant(lidParser::ConstantContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual antlrcpp::Any visitSymbolReference(lidParser::SymbolReferenceContext *ctx) override {
+  virtual antlrcpp::Any visitSymbolName(lidParser::SymbolNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
   virtual antlrcpp::Any visitCallable(lidParser::CallableContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual antlrcpp::Any visitSymbol(lidParser::SymbolContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -120,14 +120,6 @@ public:
   }
 
   virtual antlrcpp::Any visitLoopBindingExpression(lidParser::LoopBindingExpressionContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual antlrcpp::Any visitBinary(lidParser::BinaryContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual antlrcpp::Any visitBinaryOperator(lidParser::BinaryOperatorContext *ctx) override {
     return visitChildren(ctx);
   }
 
