@@ -16,20 +16,20 @@ public:
     T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, T__12 = 13, T__13 = 14, 
     T__14 = 15, T__15 = 16, T__16 = 17, T__17 = 18, T__18 = 19, T__19 = 20, 
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
-    T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, WHITESPACE = 31, POINTER_PREFIX = 32, 
-    IDENTIFIER = 33, FLOAT_LITERAL = 34, INTEGER_LITERAL = 35, STRING_LITERAL = 36, 
-    LINE_COMMENT = 37
+    T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
+    T__32 = 33, T__33 = 34, T__34 = 35, WHITESPACE = 36, POINTER_PREFIX = 37, 
+    IDENTIFIER = 38, FLOAT_LITERAL = 39, INTEGER_LITERAL = 40, STRING_LITERAL = 41, 
+    LINE_COMMENT = 42
   };
 
   enum {
     RuleProgram = 0, RuleToplevel = 1, RuleNamedFunction = 2, RuleNamedConstant = 3, 
-    RuleNamedStruct = 4, RuleStructMember = 5, RuleExpression = 6, RuleConstant = 7, 
-    RuleSymbolReference = 8, RuleCallable = 9, RuleParameter = 10, RuleLambda = 11, 
+    RuleNamedStruct = 4, RuleStructMember = 5, RuleExpression = 6, RuleSymbolName = 7, 
+    RuleCallable = 8, RuleSymbol = 9, RuleParameter = 10, RuleLambda = 11, 
     RuleTypedParameter = 12, RuleLet = 13, RuleTypedValueBinding = 14, RuleTypedValueQualifier = 15, 
     RuleTypeName = 16, RuleRegularTypeName = 17, RuleFunctionTypeName = 18, 
     RuleSet = 19, RuleBranch = 20, RuleBranchCondition = 21, RuleBranchBegin = 22, 
-    RuleBranchItem = 23, RuleBranchEnd = 24, RuleLoop = 25, RuleLoopBindingExpression = 26, 
-    RuleBinary = 27, RuleBinaryOperator = 28
+    RuleBranchItem = 23, RuleBranchEnd = 24, RuleLoop = 25, RuleLoopBindingExpression = 26
   };
 
   lidParser(antlr4::TokenStream *input);
@@ -49,9 +49,9 @@ public:
   class NamedStructContext;
   class StructMemberContext;
   class ExpressionContext;
-  class ConstantContext;
-  class SymbolReferenceContext;
+  class SymbolNameContext;
   class CallableContext;
+  class SymbolContext;
   class ParameterContext;
   class LambdaContext;
   class TypedParameterContext;
@@ -68,9 +68,7 @@ public:
   class BranchItemContext;
   class BranchEndContext;
   class LoopContext;
-  class LoopBindingExpressionContext;
-  class BinaryContext;
-  class BinaryOperatorContext; 
+  class LoopBindingExpressionContext; 
 
   class  ProgramContext : public antlr4::ParserRuleContext {
   public:
@@ -166,16 +164,21 @@ public:
 
   class  ExpressionContext : public antlr4::ParserRuleContext {
   public:
+    antlr4::Token *unaryOperator = nullptr;;
+    antlr4::Token *nestedExpression = nullptr;;
+    antlr4::Token *binaryOperator = nullptr;;
     ExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    ConstantContext *constant();
     CallableContext *callable();
+    SymbolContext *symbol();
     LambdaContext *lambda();
     LetContext *let();
     SetContext *set();
     BranchContext *branch();
     LoopContext *loop();
-    BinaryContext *binary();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *POINTER_PREFIX();
 
 
     virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -183,26 +186,10 @@ public:
   };
 
   ExpressionContext* expression();
-
-  class  ConstantContext : public antlr4::ParserRuleContext {
+  ExpressionContext* expression(int precedence);
+  class  SymbolNameContext : public antlr4::ParserRuleContext {
   public:
-    ConstantContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    SymbolReferenceContext *symbolReference();
-    antlr4::tree::TerminalNode *FLOAT_LITERAL();
-    antlr4::tree::TerminalNode *INTEGER_LITERAL();
-    antlr4::tree::TerminalNode *STRING_LITERAL();
-
-
-    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  ConstantContext* constant();
-
-  class  SymbolReferenceContext : public antlr4::ParserRuleContext {
-  public:
-    SymbolReferenceContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    SymbolNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     std::vector<antlr4::tree::TerminalNode *> IDENTIFIER();
     antlr4::tree::TerminalNode* IDENTIFIER(size_t i);
@@ -212,13 +199,13 @@ public:
    
   };
 
-  SymbolReferenceContext* symbolReference();
+  SymbolNameContext* symbolName();
 
   class  CallableContext : public antlr4::ParserRuleContext {
   public:
     CallableContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    SymbolReferenceContext *symbolReference();
+    SymbolNameContext *symbolName();
     std::vector<ParameterContext *> parameter();
     ParameterContext* parameter(size_t i);
     ExpressionContext *expression();
@@ -229,6 +216,22 @@ public:
   };
 
   CallableContext* callable();
+
+  class  SymbolContext : public antlr4::ParserRuleContext {
+  public:
+    SymbolContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    SymbolNameContext *symbolName();
+    antlr4::tree::TerminalNode *FLOAT_LITERAL();
+    antlr4::tree::TerminalNode *INTEGER_LITERAL();
+    antlr4::tree::TerminalNode *STRING_LITERAL();
+
+
+    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  SymbolContext* symbol();
 
   class  ParameterContext : public antlr4::ParserRuleContext {
   public:
@@ -365,7 +368,7 @@ public:
   public:
     SetContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    SymbolReferenceContext *symbolReference();
+    SymbolNameContext *symbolName();
     ExpressionContext *expression();
 
 
@@ -480,33 +483,9 @@ public:
 
   LoopBindingExpressionContext* loopBindingExpression();
 
-  class  BinaryContext : public antlr4::ParserRuleContext {
-  public:
-    BinaryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    std::vector<ExpressionContext *> expression();
-    ExpressionContext* expression(size_t i);
-    BinaryOperatorContext *binaryOperator();
 
-
-    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  BinaryContext* binary();
-
-  class  BinaryOperatorContext : public antlr4::ParserRuleContext {
-  public:
-    BinaryOperatorContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-
-
-    virtual antlrcpp::Any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  BinaryOperatorContext* binaryOperator();
-
+  virtual bool sempred(antlr4::RuleContext *_localctx, size_t ruleIndex, size_t predicateIndex) override;
+  bool expressionSempred(ExpressionContext *_localctx, size_t predicateIndex);
 
 private:
   static std::vector<antlr4::dfa::DFA> _decisionToDFA;

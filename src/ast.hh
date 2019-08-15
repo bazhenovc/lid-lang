@@ -117,6 +117,7 @@ namespace AST
 
         llvm::Type* ResolveType(ExpressionType type, const GeneratedScope& scope);
         llvm::Value* GenerateSafeTypeCast(llvm::Value* value, llvm::Type* desiredType);
+        llvm::Value* GenerateBoolean(CodeGenContext& cc, llvm::Value* value);
 
         // Debug printing
         virtual void DebugPrint(int indent);
@@ -130,6 +131,18 @@ namespace AST
 
         BinaryOperatorExpression(SourceParseContext parseContext,
                                  BaseExpressionPtr&& lhs, BaseExpressionPtr&& rhs);
+
+        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual void DebugPrint(int indent) override;
+    };
+
+    struct UnaryOperatorExpression : public BaseExpression
+    {
+        std::string_view    Operator;
+        BaseExpressionPtr   RHS;
+
+        UnaryOperatorExpression(SourceParseContext parseContext,
+                                BaseExpressionPtr&& rhs);
 
         virtual llvm::Value* Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
