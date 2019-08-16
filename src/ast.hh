@@ -59,9 +59,24 @@ namespace AST
         std::unordered_map<std::string_view, Member> Members;
     };
 
+    struct CodeGenResult
+    {
+        llvm::Value* const* Values = nullptr;
+        size_t NumValues = 0;
+
+        CodeGenResult() {}
+        explicit CodeGenResult(llvm::Value** value)
+            : Values(value), NumValues(1)
+        {}
+
+        explicit CodeGenResult(const std::vector<llvm::Value*>& data)
+            : Values(data.data()), NumValues(data.size())
+        {}
+    };
+
     struct GeneratedScope
     {
-        std::unordered_map<std::string_view, llvm::Value*> Bindings;
+        std::unordered_map<std::string_view, CodeGenResult> Bindings;
         std::unordered_map<std::string_view, llvm::Type*> Types;
         std::unordered_map<llvm::Type*, StructTypeInfo> TypeInfoMap;
         llvm::BasicBlock* RootBlock = nullptr;
@@ -111,13 +126,14 @@ namespace AST
         BaseExpression(SourceParseContext context);
 
         virtual ~BaseExpression();
-        virtual llvm::Value* Generate(CodeGenContext& cc) = 0;
+        virtual CodeGenResult Generate(CodeGenContext& cc) = 0;
 
-        void Assert(bool condition, std::string_view message);
+        void Assert(bool condition, std::string_view message) const;
 
-        llvm::Type* ResolveType(ExpressionType type, const GeneratedScope& scope);
-        llvm::Value* GenerateSafeTypeCast(llvm::Value* value, llvm::Type* desiredType);
-        llvm::Value* GenerateBoolean(CodeGenContext& cc, llvm::Value* value);
+        bool IsSafeTypeCastPossible(llvm::Value* value, llvm::Type* desiredType) const;
+        llvm::Type* ResolveType(ExpressionType type, const GeneratedScope& scope) const;
+        llvm::Value* GenerateSafeTypeCast(llvm::Value* value, llvm::Type* desiredType) const;
+        llvm::Value* GenerateBoolean(CodeGenContext& cc, llvm::Value* value) const;
 
         // Debug printing
         virtual void DebugPrint(int indent);
@@ -129,10 +145,12 @@ namespace AST
         BaseExpressionPtr   LHS;
         BaseExpressionPtr   RHS;
 
+        llvm::Value* LocalValue;
+
         BinaryOperatorExpression(SourceParseContext parseContext,
                                  BaseExpressionPtr&& lhs, BaseExpressionPtr&& rhs);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -141,10 +159,12 @@ namespace AST
         std::string_view    Operator;
         BaseExpressionPtr   RHS;
 
+        llvm::Value* LocalValue;
+
         UnaryOperatorExpression(SourceParseContext parseContext,
                                 BaseExpressionPtr&& rhs);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -157,13 +177,25 @@ namespace AST
             ExpressionType ReturnType;
         };
 
-        FunctionType                    Type;
-        std::vector<BaseExpressionPtr>  Body;
+        struct Overload
+        {
+            FunctionType                    Type;
+            std::vector<BaseExpressionPtr>  Body;
+
+            mutable std::vector<llvm::Value*> LocalArgumentValues;
+            mutable llvm::Value* LocalValue;
+        };
+
+        std::vector<Overload> Overloads;
+        std::vector<llvm::Value*> GeneratedOverloads;
 
         FunctionExpression(SourceParseContext context, FunctionType&& type,
                            std::vector<BaseExpressionPtr>&& body);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        // TODO: Parse context data is not accurate here, it will provide function name but not the exact location.
+        void AddOverload(std::unique_ptr<FunctionExpression>&& expr);
+
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -177,9 +209,11 @@ namespace AST
 
         std::vector<ConditionAndValue> Body;
 
+        llvm::Value* LocalValue;
+
         BranchExpression(SourceParseContext context, std::vector<ConditionAndValue>&& body);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -187,12 +221,13 @@ namespace AST
     {
         BaseExpressionPtr               FunctionExpr;
         std::vector<BaseExpressionPtr>  FunctionArguments;
-        //ExpressionScope                 Scope;
+
+        llvm::Value* LocalValue;
 
         FunctionCallExpression(SourceParseContext parseContext,
                 BaseExpressionPtr&& functionExpr, std::vector<BaseExpressionPtr>&& arguments);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -207,11 +242,13 @@ namespace AST
         std::unordered_map<std::string_view, Binding> Bindings;
         std::vector<BaseExpressionPtr> Body;
 
+        std::vector<llvm::Value*> LocalBindingValues;
+
         LetExpression(SourceParseContext parseContext,
                       std::unordered_map<std::string_view, Binding>&& bindings,
                       std::vector<BaseExpressionPtr>&& body);
 
-        virtual llvm::Value* Generate(CodeGenContext& cc) override;
+        virtual CodeGenResult Generate(CodeGenContext& cc) override;
         virtual void DebugPrint(int indent) override;
     };
 
@@ -220,10 +257,12 @@ namespace AST
         BaseExpressionPtr   MutableValue;
         BaseExpressionPtr   Expression;
 
+        llvm::Value* LocalValue;
+
         SetExpression(SourceParseContext parseContext,
                       BaseExpressionPtr mutableValue, BaseExpressionPtr expression);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 
     struct LiteralExpression : public BaseExpression
@@ -240,9 +279,11 @@ namespace AST
         LiteralType         Type = Invalid;
         std::string_view    RawValue;
 
+        llvm::Value* LocalValue;
+
         LiteralExpression(SourceParseContext parseContext, LiteralType type);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 
     struct ValueExpression : public BaseExpression
@@ -250,9 +291,11 @@ namespace AST
         std::string_view Value;
         bool DereferencePointer;
 
+        llvm::Value* LocalValue;
+
         ValueExpression(SourceParseContext parseContext, bool dereferencePointer);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 
     struct TypeCastExpression : public BaseExpression
@@ -260,11 +303,13 @@ namespace AST
         ExpressionType          DesiredType;
         AST::BaseExpressionPtr  OriginalExpression;
 
+        llvm::Value* LocalValue;
+
         TypeCastExpression(SourceParseContext parseContext,
                            ExpressionType desiredType,
                            BaseExpressionPtr&& originalExpression);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 
     struct LoopExpression : public BaseExpression
@@ -281,11 +326,14 @@ namespace AST
         std::vector<BindingExpression>  Bindings;
         std::vector<BaseExpressionPtr>  Body;
 
+        std::vector<llvm::Value*> LocalTempValues;
+        llvm::Value* LocalValue;
+
         LoopExpression(SourceParseContext parseContext,
                        std::vector<BindingExpression>&& bindings,
                        std::vector<BaseExpressionPtr>&& body);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 
     struct StructExpression : public BaseExpression
@@ -299,9 +347,11 @@ namespace AST
 
         std::vector<Member> Members;
 
+        llvm::Value* LocalValue;
+
         StructExpression(SourceParseContext parseContext,
                          std::vector<Member>&& members);
 
-        virtual llvm::Value* Generate(CodeGenContext &cc) override;
+        virtual CodeGenResult Generate(CodeGenContext &cc) override;
     };
 }

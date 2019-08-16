@@ -105,9 +105,9 @@ public:
     NamedFunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *IDENTIFIER();
-    TypeNameContext *typeName();
     std::vector<TypedParameterContext *> typedParameter();
     TypedParameterContext* typedParameter(size_t i);
+    TypeNameContext *typeName();
     std::vector<ExpressionContext *> expression();
     ExpressionContext* expression(size_t i);
 

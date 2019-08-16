@@ -70,7 +70,7 @@ namespace AST
 
     BaseExpression::~BaseExpression() {}
 
-    void BaseExpression::Assert(bool condition, std::string_view message)
+    void BaseExpression::Assert(bool condition, std::string_view message) const
     {
         if (!condition) {
             std::cerr << message << " at line " << ParseContext.LineNumber << std::endl
@@ -84,7 +84,40 @@ namespace AST
         }
     }
 
-    llvm::Type* BaseExpression::ResolveType(ExpressionType type, const GeneratedScope &scope)
+    // TODO: Rework
+    bool BaseExpression::IsSafeTypeCastPossible(llvm::Value* value, llvm::Type* desiredType) const
+    {
+        llvm::Type* valueType = value->getType();
+        if (valueType != desiredType) {
+            if (desiredType->isStructTy() || valueType->isStructTy()) {
+                return false;
+            }
+
+            if (llvm::Constant::classof(value)) {
+                if (desiredType->isIntegerTy() && valueType->isIntegerTy()) {
+                    return true;
+                } else if (desiredType->isFloatingPointTy()) {
+                    return  true; // Can always convert constants to float
+                }
+            } else {
+                if (desiredType->isIntegerTy() && valueType->isIntegerTy()) {
+                    return true;
+                } else if (desiredType->isFloatingPointTy() && valueType->isFloatingPointTy()) {
+                    return  true;
+                }
+            }
+
+            //if (valueType->isPointerTy() && desiredType->isPointerTy()) {
+            //    return true;
+            //}
+
+            return false;
+        }
+
+        return true;
+    }
+
+    llvm::Type* BaseExpression::ResolveType(ExpressionType type, const GeneratedScope &scope) const
     {
         if (!type.IsFunction) {
             auto itr = scope.Types.find(type.TypeName);
@@ -111,7 +144,7 @@ namespace AST
         return nullptr;
     }
 
-    llvm::Value* BaseExpression::GenerateSafeTypeCast(llvm::Value *value, llvm::Type *desiredType)
+    llvm::Value* BaseExpression::GenerateSafeTypeCast(llvm::Value *value, llvm::Type *desiredType) const
     {
         llvm::Type* valueType = value->getType();
         if (valueType != desiredType) {
@@ -125,16 +158,16 @@ namespace AST
                            "Cannot implicitly convert non-integer type to integer, please use a manual cast");
 
                     llvm::APInt apValue = static_cast<llvm::ConstantInt*>(value)->getValue();
-                    // TODO: Check overflow
+                    // TODO: Check constant overflow
                     return llvm::ConstantInt::get(desiredType, apValue.getLimitedValue());
                 } else if (desiredType->isFloatingPointTy()) {
                     if (valueType->isIntegerTy()) {
                         llvm::APInt apValue = static_cast<llvm::ConstantInt*>(value)->getValue();
-                        // TODO: Check overflow
+                        // TODO: Check constant overflow
                         return llvm::ConstantFP::get(desiredType, double(apValue.getLimitedValue()));
                     } else if (valueType->isFloatingPointTy()) {
                         llvm::APFloat apValue = static_cast<llvm::ConstantFP*>(value)->getValueAPF();
-                        // TODO: Check overflow
+                        // TODO: Check constant overflow
                         return llvm::ConstantFP::get(desiredType, apValue.convertToDouble());
                     }
                 }
@@ -149,7 +182,7 @@ namespace AST
         return value;
     }
 
-    llvm::Value* BaseExpression::GenerateBoolean(CodeGenContext& cc, llvm::Value *value)
+    llvm::Value* BaseExpression::GenerateBoolean(CodeGenContext& cc, llvm::Value *value) const
     {
         Assert(value->getType()->isIntegerTy(), "Boolean or integer expected");
         llvm::IntegerType* intType = static_cast<llvm::IntegerType*>(value->getType());
@@ -175,10 +208,16 @@ namespace AST
           Operator(parseContext.Source), LHS(std::move(lhs)), RHS(std::move(rhs))
     {}
 
-    llvm::Value* BinaryOperatorExpression::Generate(CodeGenContext &cc)
+    CodeGenResult BinaryOperatorExpression::Generate(CodeGenContext &cc)
     {
-        llvm::Value* lhs = LHS->Generate(cc);
-        llvm::Value* rhs = RHS->Generate(cc);
+        CodeGenResult generatedLHS = LHS->Generate(cc);
+        CodeGenResult generatedRHS = RHS->Generate(cc);
+
+        Assert(generatedLHS.NumValues == 1 && generatedRHS.NumValues == 1,
+               "Binary operations on overloaded values are not supported (yet)");
+
+        llvm::Value* lhs = generatedLHS.Values[0];
+        llvm::Value* rhs = generatedRHS.Values[0];
 
         if (llvm::Constant::classof(lhs) && !llvm::Constant::classof(rhs)) {
             lhs = GenerateSafeTypeCast(lhs, rhs->getType());
@@ -196,36 +235,44 @@ namespace AST
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateAdd(lhs, rhs);
+                LocalValue = cc.Builder->CreateAdd(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFAdd(lhs, rhs);
+                LocalValue = cc.Builder->CreateFAdd(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "-") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateSub(lhs, rhs);
+                LocalValue = cc.Builder->CreateSub(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFSub(lhs, rhs);
+                LocalValue = cc.Builder->CreateFSub(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "*") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateMul(lhs, rhs);
+                LocalValue = cc.Builder->CreateMul(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFMul(lhs, rhs);
+                LocalValue = cc.Builder->CreateFMul(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "/") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateSDiv(lhs, rhs); // TODO: signed/unsigned division
+                LocalValue = cc.Builder->CreateSDiv(lhs, rhs); // TODO: signed/unsigned division
+                    return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFDiv(lhs, rhs);
+                LocalValue = cc.Builder->CreateFDiv(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         }
 
@@ -235,54 +282,66 @@ namespace AST
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpEQ(lhs, rhs);
+                LocalValue = cc.Builder->CreateICmpEQ(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpOEQ(lhs, rhs); // TODO: OGT or UGT? OGT supports QNaN
+                LocalValue = cc.Builder->CreateFCmpOEQ(lhs, rhs); // TODO: OGT or UGT? OGT supports QNaN
+                    return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "!=") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpNE(lhs, rhs);
+                LocalValue = cc.Builder->CreateICmpNE(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpONE(lhs, rhs); // TODO: OGT or UGT? OGT supports QNaN
+                LocalValue = cc.Builder->CreateFCmpONE(lhs, rhs); // TODO: OGT or UGT? OGT supports QNaN
+                    return CodeGenResult(&LocalValue);
             }
         } else if (Operator == ">") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpSGT(lhs, rhs); // TODO: signed/unsigned comparison
+                LocalValue = cc.Builder->CreateICmpSGT(lhs, rhs); // TODO: signed/unsigned comparison
+                    return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpOGT(lhs, rhs);
+                LocalValue = cc.Builder->CreateFCmpOGT(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == ">=") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpSGE(lhs, rhs);
+                LocalValue = cc.Builder->CreateICmpSGE(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpOGE(lhs, rhs);
+                LocalValue = cc.Builder->CreateFCmpOGE(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "<") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs suppport
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpSLT(lhs, rhs);
+                LocalValue = cc.Builder->CreateICmpSLT(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpOLT(lhs, rhs);
+                LocalValue = cc.Builder->CreateFCmpOLT(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "<=") {
             if (lhs->getType()->isStructTy()) {
                 // TODO: structs suppport
                 Assert(false, "Overloading binary operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateICmpSLE(lhs, rhs);
+                LocalValue = cc.Builder->CreateICmpSLE(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFCmpOLE(lhs, rhs);
+                LocalValue = cc.Builder->CreateFCmpOLE(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         }
 
@@ -293,7 +352,8 @@ namespace AST
             } else {
                 lhs = GenerateBoolean(cc, lhs);
                 rhs = GenerateBoolean(cc, rhs);
-                return cc.Builder->CreateAnd(lhs, rhs);
+                LocalValue = cc.Builder->CreateAnd(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         } else if (Operator == "||") {
             if (lhs->getType()->isStructTy()) {
@@ -301,7 +361,8 @@ namespace AST
             } else {
                 lhs = GenerateBoolean(cc, lhs);
                 rhs = GenerateBoolean(cc, rhs);
-                return cc.Builder->CreateOr(lhs, rhs);
+                LocalValue = cc.Builder->CreateOr(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             }
         }
 
@@ -310,7 +371,8 @@ namespace AST
             if (lhs->getType()->isStructTy()) {
                 Assert(false, "Overloading bitwise operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateAnd(lhs, rhs);
+                LocalValue = cc.Builder->CreateAnd(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
                 Assert(false, "Bitwise operators not supported for floats");
             }
@@ -318,7 +380,8 @@ namespace AST
             if (lhs->getType()->isStructTy()) {
                 Assert(false, "Overloading bitwise operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateOr(lhs, rhs);
+                LocalValue = cc.Builder->CreateOr(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
                 Assert(false, "Bitwise operators not supported for floats");
             }
@@ -326,14 +389,15 @@ namespace AST
             if (lhs->getType()->isStructTy()) {
                 Assert(false, "Overloading bitwise operators for structures is not yet implemented");
             } else if (lhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateXor(lhs, rhs);
+                LocalValue = cc.Builder->CreateXor(lhs, rhs);
+                return CodeGenResult(&LocalValue);
             } else if (lhs->getType()->isFloatingPointTy()) {
                 Assert(false, "Bitwise operators not supported for floats");
             }
         }
 
         Assert(false, "Unexpected binary operator");
-        return nullptr;
+        return {};
     }
 
     void BinaryOperatorExpression::DebugPrint(int indent)
@@ -353,9 +417,13 @@ namespace AST
         RHS = std::move(rhs);
     }
 
-    llvm::Value* UnaryOperatorExpression::Generate(CodeGenContext &cc)
+    CodeGenResult UnaryOperatorExpression::Generate(CodeGenContext &cc)
     {
-        llvm::Value* rhs = RHS->Generate(cc);
+        CodeGenResult generatedRHS = RHS->Generate(cc);
+        Assert(generatedRHS.NumValues == 1,
+               "Unary operations on overloaded values are not supported (yet)");
+
+        llvm::Value* rhs = generatedRHS.Values[0];
 
         if (false) {}
 
@@ -365,16 +433,18 @@ namespace AST
                 // TODO: structs support
                 Assert(false, "Overloading unary operators for structures is not yet implemented");
             } else {
-                return rhs;
+                return generatedRHS;
             }
         } else if (Operator == "-") {
             if (rhs->getType()->isStructTy()) {
                 // TODO: structs support
                 Assert(false, "Overloading unary operators for structures is not yet implemented");
             } else if (rhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateNeg(rhs);
+                LocalValue = cc.Builder->CreateNeg(rhs);
+                return CodeGenResult(&LocalValue);
             } else if (rhs->getType()->isFloatingPointTy()) {
-                return cc.Builder->CreateFNeg(rhs);
+                LocalValue = cc.Builder->CreateFNeg(rhs);
+                return CodeGenResult(&LocalValue);
             }
         }
 
@@ -385,7 +455,8 @@ namespace AST
                 Assert(false, "Overloading unary operators for structures is not yet implemented");
             } else {
                 rhs = GenerateBoolean(cc, rhs);
-                return cc.Builder->CreateNot(rhs);
+                LocalValue = cc.Builder->CreateNot(rhs);
+                return CodeGenResult(&LocalValue);
             }
         }
 
@@ -395,14 +466,15 @@ namespace AST
                 // TODO: structs support
                 Assert(false, "Overloading unary operators for structures is not yet implemented");
             } else if (rhs->getType()->isIntegerTy()) {
-                return cc.Builder->CreateNot(rhs);
+                LocalValue = cc.Builder->CreateNot(rhs);
+                return CodeGenResult(&LocalValue);
             } else if (rhs->getType()->isFloatingPointTy()) {
                 Assert(false, "Bitwise operators not supported for floats");
             }
         }
 
         Assert(false, "Unexpected unary operator");
-        return nullptr;
+        return {};
     }
 
     void UnaryOperatorExpression::DebugPrint(int indent)
@@ -417,102 +489,134 @@ namespace AST
                                        std::vector<BaseExpressionPtr>&& body)
         : BaseExpression(context)
     {
-        Type = std::move(type);
-        Body = std::move(body);
+        Overload overload;
+        overload.Type = std::move(type);
+        overload.Body = std::move(body);
+
+        Overloads.emplace_back(std::move(overload));
     }
 
-    llvm::Value* FunctionExpression::Generate(CodeGenContext &cc)
+    void FunctionExpression::AddOverload(std::unique_ptr<FunctionExpression> &&expr)
     {
-        // Resolve return and argument types
-        llvm::Type* returnType = ResolveType(Type.ReturnType, cc.Scope);
-        std::vector<llvm::Type*> argTypes;
-        for (auto& type: Type.ArgTypes) {
-            argTypes.emplace_back(ResolveType(type, cc.Scope));
+        auto localFunctionExpr = std::move(expr);
+
+        for (auto& overload: localFunctionExpr->Overloads) {
+            Overloads.emplace_back(std::move(overload));
         }
+    }
 
-        // Create function
-        llvm::FunctionType* functionType = llvm::FunctionType::get(returnType, argTypes, false);
-        llvm::Function* functionValue = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                                                               ToLLVM(ParseContext.Source), cc.Module);
+    CodeGenResult FunctionExpression::Generate(CodeGenContext &cc)
+    {
+        for (const Overload& overload: Overloads) {
+            const auto& Type = overload.Type;
+            const auto& Body = overload.Body;
 
-        // Create body
-        if (!Body.empty()) {
-            GeneratedScope functionScope = cc.Scope;
+            // Resolve return and argument types
+            llvm::Type* returnType = ResolveType(Type.ReturnType, cc.Scope);
+            std::vector<llvm::Type*> argTypes;
+            for (auto& type: Type.ArgTypes) {
+                argTypes.emplace_back(ResolveType(type, cc.Scope));
+            }
 
-            // Generate function body
-            llvm::BasicBlock* block = llvm::BasicBlock::Create(*cc.Context, "__funcbody", functionValue);
-            cc.Builder->SetInsertPoint(block);
-            functionScope.RootBlock = block;
+            // Create function
+            llvm::FunctionType* functionType = llvm::FunctionType::get(returnType, argTypes, false);
+            llvm::Function* functionValue = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                                                                   ToLLVM(ParseContext.Source), cc.Module);
 
-            // Load parameters
-            if (!Type.ArgNames.empty()) {
-                //llvm::BasicBlock* paramsBlock = llvm::BasicBlock::Create(LLVMContext, "load_params", functionValue);
-                //Builder.SetInsertPoint(paramsBlock);
+            // Create body
+            if (!Body.empty()) {
+                GeneratedScope functionScope = cc.Scope;
 
-                for (size_t i = 0; i < Type.ArgNames.size(); ++i) {
-                    if (!Type.ArgNames[i].empty()) {
-                        Assert(functionScope.Bindings.find(Type.ArgNames[i]) == functionScope.Bindings.end(),
-                               "Conflicting binding name in function scope");
-                        //llvm::Value* allocation = Builder.CreateAlloca(functionSignature.ArgTypes[i]);
-                        //Builder.CreateStore(functionValue->arg_begin() + i, allocation);
-                        //functionScope.Bindings.insert(std::make_pair(functionSignature.ArgNames[i], allocation));
-                        functionScope.Bindings.insert(std::make_pair(Type.ArgNames[i], functionValue->arg_begin() + i));
+                // Generate function body
+                llvm::BasicBlock* block = llvm::BasicBlock::Create(*cc.Context, "__funcbody", functionValue);
+                cc.Builder->SetInsertPoint(block);
+                functionScope.RootBlock = block;
+
+                // Load parameters
+                if (!Type.ArgNames.empty()) {
+                    //llvm::BasicBlock* paramsBlock = llvm::BasicBlock::Create(LLVMContext, "load_params", functionValue);
+                    //Builder.SetInsertPoint(paramsBlock);
+
+                    overload.LocalArgumentValues.reserve(Type.ArgNames.size());
+                    for (size_t i = 0; i < Type.ArgNames.size(); ++i) {
+                        if (!Type.ArgNames[i].empty()) {
+                            Assert(functionScope.Bindings.find(Type.ArgNames[i]) == functionScope.Bindings.end(),
+                                   "Conflicting binding name in function scope");
+                            //llvm::Value* allocation = Builder.CreateAlloca(functionSignature.ArgTypes[i]);
+                            //Builder.CreateStore(functionValue->arg_begin() + i, allocation);
+                            //functionScope.Bindings.insert(std::make_pair(functionSignature.ArgNames[i], allocation));
+                            overload.LocalArgumentValues.emplace_back(functionValue->arg_begin() + i);
+
+                            CodeGenResult generatedFunctionArg;
+                            generatedFunctionArg.Values = &overload.LocalArgumentValues[i];
+                            generatedFunctionArg.NumValues = 1;
+
+                            functionScope.Bindings.insert(std::make_pair(Type.ArgNames[i], generatedFunctionArg));
+                        }
                     }
                 }
-            }
 
-            CodeGenContext localContext = {
-                std::move(functionScope),
-                cc.Builder, cc.Module, cc.Context
-            };
+                CodeGenContext localContext = {
+                    std::move(functionScope),
+                    cc.Builder, cc.Module, cc.Context
+                };
 
-            llvm::Value* value = nullptr;
-            for (auto& body: Body) {
-                value = body->Generate(localContext);
-            }
-
-            if (functionType->getReturnType()->isVoidTy()) {
-                cc.Builder->CreateRetVoid();
-            } else {
-                // Cast to return type
-                if (value != nullptr) {
-                    value = GenerateSafeTypeCast(value, returnType);
+                CodeGenResult generatedValue = {};
+                for (auto& body: Body) {
+                    generatedValue = body->Generate(localContext);
                 }
 
-                Assert((value == nullptr) || (value != nullptr && value->getType() == returnType),
-                       "Function return type does not match expression type");
+                Assert(generatedValue.NumValues == 1,
+                       "Returning overloaded values from functions is not supported(yet)");
+                llvm::Value* value = generatedValue.Values[0];
 
-                if (value == nullptr || value->getType()->isVoidTy()) {
+                if (functionType->getReturnType()->isVoidTy()) {
                     cc.Builder->CreateRetVoid();
                 } else {
-                    cc.Builder->CreateRet(value); // TODO: return statements
+                    // Cast to return type
+                    if (value != nullptr) {
+                        value = GenerateSafeTypeCast(value, returnType);
+                    }
+
+                    Assert((value == nullptr) || (value != nullptr && value->getType() == returnType),
+                           "Function return type does not match expression type");
+
+                    if (value == nullptr || value->getType()->isVoidTy()) {
+                        cc.Builder->CreateRetVoid();
+                    } else {
+                        cc.Builder->CreateRet(value); // TODO: return statements
+                    }
                 }
-            }
 
-            // Restore root block
-            cc.Builder->SetInsertPoint(cc.Scope.RootBlock);
+                // Restore root block
+                cc.Builder->SetInsertPoint(cc.Scope.RootBlock);
 
-            if (ParseContext.Source == "main")  { // TODO: explicit dll storage class for functions
-                functionValue->setDLLStorageClass(llvm::Function::DefaultStorageClass);
-                functionValue->setVisibility(llvm::Function::DefaultVisibility);
+                if (ParseContext.Source == "main")  { // TODO: explicit dll storage class for functions
+                    functionValue->setDLLStorageClass(llvm::Function::DefaultStorageClass);
+                    functionValue->setVisibility(llvm::Function::DefaultVisibility);
+                } else {
+                    functionValue->setVisibility(llvm::Function::HiddenVisibility);
+                    functionValue->setDLLStorageClass(llvm::Function::DefaultStorageClass);
+                    functionValue->setLinkage(llvm::Function::InternalLinkage);
+                }
             } else {
-                functionValue->setVisibility(llvm::Function::HiddenVisibility);
-                functionValue->setDLLStorageClass(llvm::Function::DefaultStorageClass);
-                functionValue->setLinkage(llvm::Function::InternalLinkage);
+                functionValue->setDLLStorageClass(llvm::Function::DLLImportStorageClass);
+                functionValue->setVisibility(llvm::Function::DefaultVisibility);
             }
-        } else {
-            functionValue->setDLLStorageClass(llvm::Function::DLLImportStorageClass);
-            functionValue->setVisibility(llvm::Function::DefaultVisibility);
+
+            GeneratedOverloads.emplace_back(functionValue);
         }
 
-        return functionValue;
+        return CodeGenResult(GeneratedOverloads);
     }
 
     void FunctionExpression::DebugPrint(int indent)
     {
         BaseExpression::DebugPrint(indent);
-        for (auto& body: Body) {
-            body->DebugPrint(indent + 1);
+        for (const auto& overload: Overloads) {
+            for (const auto& body: overload.Body) {
+                body->DebugPrint(indent + 1);
+            }
         }
     }
 
@@ -524,7 +628,7 @@ namespace AST
         Body = std::move(body);
     }
 
-    llvm::Value* BranchExpression::Generate(CodeGenContext &cc)
+    CodeGenResult BranchExpression::Generate(CodeGenContext &cc)
     {
         // Blocks
         std::vector<llvm::BasicBlock*> generatedBlocks;
@@ -562,7 +666,11 @@ namespace AST
             for (size_t i = 0; i < Body.size(); ++i) {
                 // Generate condition
                 if (i != generatedCondBlocks.size() && Body[i].Condition != nullptr) {
-                    llvm::Value* condition = Body[i].Condition->Generate(localContext);
+                    CodeGenResult generatedCondition = Body[i].Condition->Generate(localContext);
+                    Assert(generatedCondition.NumValues == 1,
+                           "Branching on overloaded values are not supported (yet)");
+
+                    llvm::Value* condition = generatedCondition.Values[0];
                     condition = GenerateBoolean(cc, condition);
 
                     // Create branch
@@ -582,8 +690,11 @@ namespace AST
                 cc.Builder->SetInsertPoint(generatedBlocks[i]);
 
                 for (auto& value: Body[i].Values) {
-                    llvm::Value* generatedValue = value->Generate(localContext);
-                    generatedValues[i] = generatedValue;
+                    CodeGenResult generatedValue = value->Generate(localContext);
+                    Assert(generatedValue.NumValues == 1,
+                           "Branching on overloaded values are not supported (yet)");
+
+                    generatedValues[i] = generatedValue.Values[0];
                 }
 
                 cc.Builder->CreateBr(nextBlock);
@@ -600,7 +711,8 @@ namespace AST
             phi->addIncoming(GenerateSafeTypeCast(generatedValues[i], desiredType), generatedBlocks[i]);
         }
 
-        return phi;
+        LocalValue = phi;
+        return CodeGenResult(&LocalValue);
     }
 
     void BranchExpression::DebugPrint(int indent)
@@ -627,7 +739,7 @@ namespace AST
         FunctionArguments = std::move(arguments);
     }
 
-    llvm::Value* FunctionCallExpression::Generate(CodeGenContext &cc)
+    CodeGenResult FunctionCallExpression::Generate(CodeGenContext &cc)
     {
         // Generate scope
         GeneratedScope generatedScope = cc.Scope;
@@ -647,37 +759,110 @@ namespace AST
             cc.Builder, cc.Module, cc.Context
         };
 
+        // TODO: This is generating arguments BEFORE resolving function name. Is it correct?
+        std::vector<llvm::Value*> argumentValues;
+        std::vector<llvm::Type*> argumentTypes;
+        for (size_t i = 0; i < FunctionArguments.size(); ++i) {
+            CodeGenResult argumentValue = FunctionArguments[i]->Generate(localContext);
+            Assert(argumentValue.NumValues == 1,
+                   "Passing overloaded values to function calls is not supported(yet)");
+
+            argumentValues.emplace_back(argumentValue.Values[0]);
+            argumentTypes.emplace_back(argumentValue.Values[0]->getType());
+        }
+
         // Generate body
         Assert(FunctionExpr != nullptr, "Empty function call");
-        llvm::Value* value = FunctionExpr->Generate(localContext);
+        CodeGenResult generatedValue = FunctionExpr->Generate(localContext);
 
-        if (value != nullptr) {
-            llvm::Type* valueType = value->getType();
+        Assert(generatedValue.NumValues > 0,
+               "Function has no overloads");
+
+        // Pick default overload
+        llvm::Value* selectedValue = generatedValue.Values[0];
+
+        // Find compatible overload
+        for (size_t i = 0; i < generatedValue.NumValues; ++i) {
+            selectedValue = generatedValue.Values[i];
+            llvm::Type* valueType = selectedValue->getType();
+
             bool isFunction = valueType->isPointerTy() && valueType->getPointerElementType()->isFunctionTy();
             Assert(isFunction, "Function expected");
 
             llvm::FunctionType* functionType = static_cast<llvm::FunctionType*>(valueType->getPointerElementType());
-            if (FunctionArguments.size() != functionType->getNumParams()) {
-                std::string errorMessage = llvm::formatv("Function \"{0}\" expects {1} arguments, not {2}",
-                                                         ToLLVM(FunctionExpr->ParseContext.Source),
-                                                         FunctionArguments.size(),
-                                                         functionType->getNumParams());
-                Assert(false, errorMessage);
+            if (functionType->getNumParams() == argumentTypes.size()) {
+                for (size_t argumentIndex = 0; argumentIndex < argumentTypes.size(); ++argumentIndex) {
+                    llvm::Type* argumentType = *(functionType->param_begin() + argumentIndex);
+                    if (!IsSafeTypeCastPossible(argumentValues[argumentIndex], argumentType)) {
+                        selectedValue = nullptr;
+                        break;
+                    }
+                }
             }
-
-            std::vector<llvm::Value*> arguments;
-            for (size_t i = 0; i < FunctionArguments.size(); ++i) {
-                llvm::Type* expectedType = *(functionType->param_begin() + i);
-                llvm::Value* argumentValue = GenerateSafeTypeCast(
-                            FunctionArguments[i]->Generate(localContext), expectedType);
-                arguments.emplace_back(argumentValue);
-            }
-
-            return cc.Builder->CreateCall(value, arguments);
         }
 
-        //Assert(!Scope.Bindings.empty(), "Empty form");
-        return nullptr;
+        // Generate error message if needed
+        if (selectedValue == nullptr) {
+            std::string argumentsString;
+            std::string candidates;
+
+            argumentsString += FunctionExpr->ParseContext.Source;
+            argumentsString += "( ";
+            for (llvm::Type* type: argumentTypes) {
+                std::string type_str;
+                llvm::raw_string_ostream rso(type_str);
+                type->print(rso);
+
+                argumentsString += rso.str();
+                argumentsString += " ";
+            }
+            argumentsString += ")";
+
+            for (size_t i = 0; i < generatedValue.NumValues; ++i) {
+                llvm::Value* value = generatedValue.Values[i];
+                llvm::Type* valueType = value->getType();
+
+                llvm::FunctionType* functionType = static_cast<llvm::FunctionType*>(valueType->getPointerElementType());
+
+                candidates += FunctionExpr->ParseContext.Source;
+                candidates += "( ";
+                for (llvm::Type* type: functionType->params()) {
+                    std::string type_str;
+                    llvm::raw_string_ostream rso(type_str);
+                    type->print(rso);
+
+                    candidates += rso.str();
+                    candidates +=  + " ";
+                }
+                candidates += ")\n";
+            }
+
+            std::string errorMessage = llvm::formatv("Could not find matching function for call to \""
+                                                     "{0}\", candidates are:\n{1}", argumentsString, candidates);
+            Assert(false, errorMessage);
+        }
+
+        // Generate code
+        llvm::Type* valueType = selectedValue->getType();
+        bool isFunction = valueType->isPointerTy() && valueType->getPointerElementType()->isFunctionTy();
+        Assert(isFunction, "Function expected");
+
+        llvm::FunctionType* functionType = static_cast<llvm::FunctionType*>(valueType->getPointerElementType());
+        //if (FunctionArguments.size() != functionType->getNumParams()) {
+        //    std::string errorMessage = llvm::formatv("Function \"{0}\" expects {1} arguments, not {2}",
+        //                                             ToLLVM(FunctionExpr->ParseContext.Source),
+        //                                             FunctionArguments.size(),
+        //                                             functionType->getNumParams());
+        //    Assert(false, errorMessage);
+        //}
+
+        for (size_t i = 0; i < FunctionArguments.size(); ++i) {
+            llvm::Type* expectedType = *(functionType->param_begin() + i);
+            argumentValues[i] = GenerateSafeTypeCast(argumentValues[i], expectedType);
+        }
+
+        LocalValue = cc.Builder->CreateCall(selectedValue, argumentValues);
+        return CodeGenResult(&LocalValue);
     }
 
     void FunctionCallExpression::DebugPrint(int indent)
@@ -702,10 +887,11 @@ namespace AST
         Body = std::move(body);
     }
 
-    llvm::Value* LetExpression::Generate(CodeGenContext &cc)
+    CodeGenResult LetExpression::Generate(CodeGenContext &cc)
     {
         // Generate bindings
         GeneratedScope localScope = cc.Scope;
+        LocalBindingValues.reserve(Bindings.size());
         for (auto& binding : Bindings) {
             std::string_view bindingName = binding.first;
 
@@ -714,7 +900,11 @@ namespace AST
 
             ExpressionQualifiers qualifiers = binding.second.Qualifiers;
 
-            llvm::Value* bindingValue = binding.second.Body->Generate(cc);
+            CodeGenResult generatedBinding = binding.second.Body->Generate(cc);
+            Assert(generatedBinding.NumValues == 1,
+                   "Declaring local overloaded values is not supported(yet)");
+
+            llvm::Value* bindingValue = generatedBinding.Values[0];
             llvm::Type* bindingType = bindingValue->getType();
 
             if (bindingType->isStructTy() || qualifiers.IsMutable) {// || !llvm::Constant::classof(bindingValue)) {
@@ -723,7 +913,13 @@ namespace AST
                 bindingValue = bindingAlloc;
             }
 
-            localScope.Bindings.insert(itr, { bindingName, bindingValue });
+            LocalBindingValues.emplace_back(bindingValue);
+
+            CodeGenResult generatedBindingValue;
+            generatedBindingValue.Values = &LocalBindingValues.back();
+            generatedBindingValue.NumValues = 1;
+
+            localScope.Bindings.insert(itr, { bindingName, generatedBindingValue });
         }
 
         // Generate body
@@ -732,7 +928,7 @@ namespace AST
             cc.Builder, cc.Module, cc.Context
         };
 
-        llvm::Value* value = nullptr;
+        CodeGenResult value = {};
         for (auto& body: Body) {
             value = body->Generate(localContext);
         }
@@ -761,10 +957,16 @@ namespace AST
         Expression = std::move(expression);
     }
 
-    llvm::Value* SetExpression::Generate(CodeGenContext &cc)
+    CodeGenResult SetExpression::Generate(CodeGenContext &cc)
     {
-        llvm::Value* mutableValue = MutableValue->Generate(cc);
-        llvm::Value* expression = Expression->Generate(cc);
+        CodeGenResult generatedMutableValue = MutableValue->Generate(cc);
+        CodeGenResult generatedExpression = Expression->Generate(cc);
+
+        Assert(generatedMutableValue.NumValues == 1 && generatedExpression.NumValues == 1,
+               "Assignment to overloaded values is not supported(yet)");
+
+        llvm::Value* mutableValue = generatedMutableValue.Values[0];
+        llvm::Value* expression = generatedExpression.Values[0];
 
         Assert(llvm::AllocaInst::classof(mutableValue) || llvm::GetElementPtrInst::classof(mutableValue),
                "(set) expects a mutable value");
@@ -772,7 +974,9 @@ namespace AST
         llvm::Type* desiredType = mutableValue->getType()->getPointerElementType();
 
         cc.Builder->CreateStore(GenerateSafeTypeCast(expression, desiredType), mutableValue);
-        return expression;
+
+        LocalValue = expression;
+        return CodeGenResult(&LocalValue);
     }
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -797,7 +1001,7 @@ namespace AST
         RawValue = parseContext.Source;
     }
 
-    llvm::Value* LiteralExpression::Generate(CodeGenContext& cc)
+    CodeGenResult LiteralExpression::Generate(CodeGenContext& cc)
     {
         llvm::Value* value = nullptr;
 
@@ -829,7 +1033,8 @@ namespace AST
             } break;
         }
 
-        return value;
+        LocalValue = value;
+        return CodeGenResult(&LocalValue);
     }
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -841,7 +1046,7 @@ namespace AST
         DereferencePointer = dereferencePointer;
     }
 
-    llvm::Value* ValueExpression::Generate(CodeGenContext &cc)
+    CodeGenResult ValueExpression::Generate(CodeGenContext &cc)
     {
         std::string_view symbolName = Value;
         size_t dotIndex = Value.find_first_of('.');
@@ -854,56 +1059,70 @@ namespace AST
         auto itr = cc.Scope.Bindings.find(rootSymbolName);
         Assert(itr != cc.Scope.Bindings.end(), "Unknown identifier");
 
-        llvm::Value* value = (*itr).second;
-        llvm::Type* valueType = value->getType();
+        CodeGenResult generatedValue = (*itr).second;
 
-        while (dotIndex != std::string_view::npos) {
-            Assert(valueType->getContainedType(0)->isStructTy(), "Value does not seem to be a struct");
+        // Try to resolve the name if it's not overloaded
+        if (generatedValue.NumValues == 1) {
+            llvm::Value* value = generatedValue.Values[0];
+            llvm::Type* valueType = value->getType();
 
-            symbolName = symbolName.substr(dotIndex + 1, std::string_view::npos);
-            dotIndex = symbolName.find_first_of('.');
+            while (dotIndex != std::string_view::npos) {
+                Assert(generatedValue.NumValues == 1,
+                       "Struct member overloading is not supported(yet)");
 
-            std::string_view memberName = symbolName;
-            if (dotIndex != std::string_view::npos) {
-                memberName = memberName.substr(0, dotIndex);
+                Assert(valueType->getContainedType(0)->isStructTy(), "Value does not seem to be a struct");
+
+                symbolName = symbolName.substr(dotIndex + 1, std::string_view::npos);
+                dotIndex = symbolName.find_first_of('.');
+
+                std::string_view memberName = symbolName;
+                if (dotIndex != std::string_view::npos) {
+                    memberName = memberName.substr(0, dotIndex);
+                }
+
+                auto typeInfoItr = cc.Scope.TypeInfoMap.find(valueType->getContainedType(0));
+                if (typeInfoItr == cc.Scope.TypeInfoMap.end()) {
+                    std::string errorMessage = llvm::formatv("Value \"{0}\" does not seem to be a struct",
+                                                             ToLLVM(memberName));
+                    Assert(false, errorMessage);
+                }
+
+                StructTypeInfo& typeInfo = (*typeInfoItr).second;
+                auto memberItr = typeInfo.Members.find(memberName);
+
+                if (memberItr == typeInfo.Members.end()) {
+                    std::string errorMessage = llvm::formatv("No member named \"{0}\" found for struct \"{1}\"",
+                                                             ToLLVM(memberName), valueType->getContainedType(0)->getStructName());
+                    Assert(false, errorMessage);
+                }
+                StructTypeInfo::Member& member = (*memberItr).second;
+
+                value = cc.Builder->CreateStructGEP(value, member.Index);
+                valueType = value->getType();
             }
 
-            auto typeInfoItr = cc.Scope.TypeInfoMap.find(valueType->getContainedType(0));
-            if (typeInfoItr == cc.Scope.TypeInfoMap.end()) {
-                std::string errorMessage = llvm::formatv("Value \"{0}\" does not seem to be a struct",
-                                                         ToLLVM(memberName));
-                Assert(false, errorMessage);
+            // TODO: refactor strings and arrays
+            if (valueType->isPointerTy() && value->getType()->getContainedType(0)->isArrayTy()) {
+                llvm::Value* indices[] = {
+                    llvm::ConstantInt::get(llvm::Type::getInt64Ty(*cc.Context), 0),
+                    llvm::ConstantInt::get(llvm::Type::getInt64Ty(*cc.Context), 0),
+                };
+                LocalValue = cc.Builder->CreateGEP(value->getType()->getContainedType(0),
+                                                   value, indices);
+                return CodeGenResult(&LocalValue);
             }
 
-            StructTypeInfo& typeInfo = (*typeInfoItr).second;
-            auto memberItr = typeInfo.Members.find(memberName);
-
-            if (memberItr == typeInfo.Members.end()) {
-                std::string errorMessage = llvm::formatv("No member named \"{0}\" found for struct \"{1}\"",
-                                                         ToLLVM(memberName), valueType->getContainedType(0)->getStructName());
-                Assert(false, errorMessage);
+            if (DereferencePointer && (llvm::AllocaInst::classof(value) || llvm::GetElementPtrInst::classof(value))) {
+                LocalValue = cc.Builder->CreateLoad(value);
+                return CodeGenResult(&LocalValue);
             }
-            StructTypeInfo::Member& member = (*memberItr).second;
 
-            value = cc.Builder->CreateStructGEP(value, member.Index);
-            valueType = value->getType();
+            LocalValue = value;
+            return CodeGenResult(&LocalValue);
         }
 
-        // TODO: refactor strings and arrays
-        if (valueType->isPointerTy() && value->getType()->getContainedType(0)->isArrayTy()) {
-            llvm::Value* indices[] = {
-                llvm::ConstantInt::get(llvm::Type::getInt64Ty(*cc.Context), 0),
-                llvm::ConstantInt::get(llvm::Type::getInt64Ty(*cc.Context), 0),
-            };
-            return cc.Builder->CreateGEP(value->getType()->getContainedType(0),
-                                         value, indices);
-        }
-
-        if (DereferencePointer && (llvm::AllocaInst::classof(value) || llvm::GetElementPtrInst::classof(value))) {
-            return cc.Builder->CreateLoad(value);
-        }
-
-        return value;
+        // Return it as-is in case it's overloaded
+        return generatedValue;
     }
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -917,13 +1136,17 @@ namespace AST
         OriginalExpression = std::move(originalExpression);
     }
 
-    llvm::Value* TypeCastExpression::Generate(CodeGenContext &cc)
+    CodeGenResult TypeCastExpression::Generate(CodeGenContext &cc)
     {
         llvm::Type* generatedType = ResolveType(DesiredType, cc.Scope);
-        llvm::Value* generatedValue = OriginalExpression->Generate(cc);
+        CodeGenResult generatedValue = OriginalExpression->Generate(cc);
+
+        Assert(generatedValue.NumValues == 1,
+               "Type cast expressions are not supported on overloaded values(yet)");
 
         // TODO: Support unsafe type casts too
-        return GenerateSafeTypeCast(generatedValue, generatedType);
+        LocalValue = GenerateSafeTypeCast(generatedValue.Values[0], generatedType);
+        return CodeGenResult(&LocalValue);
     }
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -937,7 +1160,7 @@ namespace AST
         Body = std::move(body);
     }
 
-    llvm::Value* LoopExpression::Generate(CodeGenContext &cc)
+    CodeGenResult LoopExpression::Generate(CodeGenContext &cc)
     {
         llvm::BasicBlock* parentBlock = cc.Builder->GetInsertBlock();
         llvm::Function* parentFunction = parentBlock->getParent();
@@ -954,6 +1177,8 @@ namespace AST
         };
         std::vector<GeneratedBinding> generatedBindings;
 
+        LocalTempValues.reserve(Bindings.size() * 3); // TODO: OMFG this is ugly
+
         // Generate initial stores and conditions
         {
             GeneratedScope localScope = cc.Scope;
@@ -963,7 +1188,11 @@ namespace AST
                 auto itr = localScope.Bindings.find(bindingName);
                 Assert(itr == localScope.Bindings.end(), "Conflicting binding name");
 
-                llvm::Value* bindingValue = binding.InitialValue->Generate(cc);
+                CodeGenResult generatedBinding = binding.InitialValue->Generate(cc);
+                Assert(generatedBinding.NumValues == 1,
+                       "Overloaded values are not supported in loop control blocks(yet)");
+
+                llvm::Value* bindingValue = generatedBinding.Values[0];
 
                 llvm::Type* bindingType = ResolveType(binding.DesiredType, localScope);
                 bindingValue = GenerateSafeTypeCast(bindingValue, bindingType);
@@ -972,7 +1201,13 @@ namespace AST
                 cc.Builder->CreateStore(bindingValue, bindingAlloc);
 
                 generatedBindings.push_back({ bindingName, bindingAlloc });
-                localScope.Bindings.insert({}, { bindingName, bindingValue });
+                LocalTempValues.emplace_back(bindingValue);
+
+                CodeGenResult generatedBindingValue;
+                generatedBindingValue.Values = &LocalTempValues.back();
+                generatedBindingValue.NumValues = 1;
+
+                localScope.Bindings.insert({}, { bindingName, generatedBindingValue });
             }
 
             CodeGenContext localContext = {
@@ -982,7 +1217,11 @@ namespace AST
 
             llvm::Value* loopCondition = nullptr;
             for (size_t i = 0; i < Bindings.size(); ++i) {
-                llvm::Value* bindingCondition = Bindings[i].ExitCondition->Generate(localContext);
+                CodeGenResult generatedCondition = Bindings[i].ExitCondition->Generate(localContext);
+                Assert(generatedCondition.NumValues == 1,
+                       "Overloaded values are not supported in loop control blocks(yet)");
+
+                llvm::Value* bindingCondition = generatedCondition.Values[0];
                 Assert(bindingCondition->getType()->isIntegerTy(), "Boolean or integer expected");
 
                 loopCondition = loopCondition == nullptr ?
@@ -993,7 +1232,7 @@ namespace AST
         }
 
         // Generate body
-        llvm::Value* bodyValue = nullptr;
+        CodeGenResult bodyValue = {};
         {
             GeneratedScope localScope = cc.Scope;
 
@@ -1007,7 +1246,13 @@ namespace AST
                 Assert(itr == localScope.Bindings.end(), "Conflicting binding name");
 
                 llvm::Value* bindingLoad = cc.Builder->CreateLoad(generatedBindings[i].Value);
-                localScope.Bindings.insert(itr, { generatedBindings[i].Name, bindingLoad });
+                LocalTempValues.emplace_back(bindingLoad);
+
+                CodeGenResult generatedBinding;
+                generatedBinding.Values = &LocalTempValues.back();
+                generatedBinding.NumValues = 1;
+
+                localScope.Bindings.insert(itr, { generatedBindings[i].Name, generatedBinding });
             }
 
             CodeGenContext localContext = {
@@ -1026,7 +1271,11 @@ namespace AST
                 GeneratedScope localScope = cc.Scope;
 
                 for (size_t i = 0; i < Bindings.size(); ++i) {
-                    llvm::Value* stepValue = Bindings[i].Body->Generate(localContext);
+                    CodeGenResult generatedStep = Bindings[i].Body->Generate(localContext);
+                    Assert(generatedStep.NumValues == 1,
+                           "Overloaded values are not supported in loop control blocks(yet)");
+
+                    llvm::Value* stepValue = generatedStep.Values[0];
                     Assert(stepValue->getType() == generatedBindings[i].Value->getType()->getContainedType(0),
                            "Type mismatch, loop step value type should match the corresponding binding type");
                     cc.Builder->CreateStore(stepValue, generatedBindings[i].Value);
@@ -1034,7 +1283,13 @@ namespace AST
                     auto itr = localScope.Bindings.find(generatedBindings[i].Name);
                     Assert(itr == localScope.Bindings.end(), "Conflicting binding name");
 
-                    localScope.Bindings.insert(itr, { generatedBindings[i].Name, stepValue });
+                    LocalTempValues.emplace_back(stepValue);
+
+                    CodeGenResult generatedStepValue;
+                    generatedStepValue.Values = &LocalTempValues.back();
+                    generatedStepValue.NumValues = 1;
+
+                    localScope.Bindings.insert(itr, { generatedBindings[i].Name, generatedStepValue });
                 }
 
                 CodeGenContext localContext = {
@@ -1044,7 +1299,11 @@ namespace AST
 
                 llvm::Value* loopCondition = nullptr;
                 for (size_t i = 0; i < Bindings.size(); ++i) {
-                    llvm::Value* bindingCondition = Bindings[i].ExitCondition->Generate(localContext);
+                    CodeGenResult generatedCondition = Bindings[i].ExitCondition->Generate(localContext);
+                    Assert(generatedCondition.NumValues == 1,
+                           "Overloaded values are not supported in loop control blocks(yet)");
+
+                    llvm::Value* bindingCondition = generatedCondition.Values[0];
                     Assert(bindingCondition->getType()->isIntegerTy(), "Boolean or integer expected");
 
                     loopCondition = loopCondition == nullptr ?
@@ -1056,22 +1315,28 @@ namespace AST
             }
         }
 
+        Assert(LocalTempValues.size() == Bindings.size() * 3,
+               "Something went wrong with LocalTempValues, double-check reserved size");
+        Assert(bodyValue.NumValues == 1,
+               "Using overloaded values for loop return statements is not supported(yet)");
+
         // This is the second place that modifies the insert point and does not restore it back
         cc.Builder->SetInsertPoint(nextBlock);
         cc.Scope.RootBlock = nextBlock;
 
         // TODO: This block juggling results in weird jumps in generated IR code, needs to be fixed. This could also be caused by LLVM debug printing which sorts blocks in a weird order.
 
-        llvm::Type* desiredType = bodyValue->getType();
+        llvm::Type* desiredType = bodyValue.Values[0]->getType();
         llvm::PHINode* phi = cc.Builder->CreatePHI(desiredType, 1);
-        phi->addIncoming(bodyValue, loopBlock);
+        phi->addIncoming(bodyValue.Values[0], loopBlock);
 
         // PHINode should have one entry for each predecessor of its parent basic block
         //  this means that we have to provide some sensible default value. Let it be zero
         llvm::Value* nullValue = llvm::Constant::getNullValue(desiredType);
         phi->addIncoming(nullValue, parentBlock);
 
-        return phi;
+        LocalValue = phi;
+        return CodeGenResult(&LocalValue);
     }
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -1084,7 +1349,7 @@ namespace AST
         Members = std::move(members);
     }
 
-    llvm::Value* StructExpression::Generate(CodeGenContext &cc)
+    CodeGenResult StructExpression::Generate(CodeGenContext &cc)
     {
         // Create struct type
         StructTypeInfo typeInfo;
@@ -1119,9 +1384,11 @@ namespace AST
         llvm::Value* structLoad = cc.Builder->CreateLoad(structAlloc);
         cc.Builder->CreateRet(structLoad);
 
-        cc.Scope.Bindings.insert(std::make_pair(ParseContext.Source, functionValue));
+        LocalValue = functionValue;
+        CodeGenResult generatedFunctionValue(&LocalValue);
 
+        cc.Scope.Bindings.insert(std::make_pair(ParseContext.Source, generatedFunctionValue));
+        return generatedFunctionValue;
         //return structType;
-        return functionValue;
     }
 }

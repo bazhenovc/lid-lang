@@ -223,6 +223,29 @@ function TestNestedStruct(): void {
     }
 }
 
+// Function overloading
+function OverloadedFunction(:i32): i32 {
+    puts("Wrong overloaded function")
+    12
+}
+
+function OverloadedFunction(:i32, :i32): i32 {
+    puts("Wrong overloaded function")
+    24
+}
+
+function OverloadedFunction(a: i32, b: f32): i32 {
+    puts("Testing overloaded function")
+    42
+}
+
+function TestFunctionOverload() {
+    let a: i32 = 1 b: f32 = 3.14 {
+        if OverloadedFunction(a, b) == 42 { puts("Function overloading test passed") }
+        else                              { puts("Function overloading test failed") }
+    }
+}
+
 // Main function
 function main(): i32 {
     puts("Hello World")
@@ -242,6 +265,7 @@ function main(): i32 {
     TestForLoop()
     TestStructMembers()
     TestNestedStruct()
+    TestFunctionOverload()
 
     let x = rand() {
         x
