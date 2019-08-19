@@ -84,6 +84,14 @@ namespace AST
         }
     }
 
+    std::string BaseExpression::GetTypeName(llvm::Type* type) const
+    {
+        std::string type_str;
+        llvm::raw_string_ostream rso(type_str);
+        type->print(rso);
+        return rso.str();
+    }
+
     // TODO: Rework
     bool BaseExpression::IsSafeTypeCastPossible(llvm::Value* value, llvm::Type* desiredType) const
     {
@@ -177,7 +185,9 @@ namespace AST
             //    return value;
             //}
 
-            Assert(false, "Cannot perform implicit type conversion");
+            std::string errorMessage = llvm::formatv("Cannot perform implicit type conversion from \"{0}\" to \"{1}\"",
+                                                     GetTypeName(valueType), GetTypeName(desiredType));
+            Assert(false, errorMessage);
         }
         return value;
     }
@@ -809,11 +819,7 @@ namespace AST
             argumentsString += FunctionExpr->ParseContext.Source;
             argumentsString += "( ";
             for (llvm::Type* type: argumentTypes) {
-                std::string type_str;
-                llvm::raw_string_ostream rso(type_str);
-                type->print(rso);
-
-                argumentsString += rso.str();
+                argumentsString += GetTypeName(type);
                 argumentsString += " ";
             }
             argumentsString += ")";
@@ -827,11 +833,7 @@ namespace AST
                 candidates += FunctionExpr->ParseContext.Source;
                 candidates += "( ";
                 for (llvm::Type* type: functionType->params()) {
-                    std::string type_str;
-                    llvm::raw_string_ostream rso(type_str);
-                    type->print(rso);
-
-                    candidates += rso.str();
+                    candidates += GetTypeName(type);
                     candidates +=  + " ";
                 }
                 candidates += ")\n";
