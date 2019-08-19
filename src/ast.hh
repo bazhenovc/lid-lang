@@ -65,6 +65,7 @@ namespace AST
         size_t NumValues = 0;
 
         CodeGenResult() {}
+
         explicit CodeGenResult(llvm::Value** value)
             : Values(value), NumValues(1)
         {}
@@ -130,6 +131,7 @@ namespace AST
 
         void Assert(bool condition, std::string_view message) const;
 
+        std::string GetTypeName(llvm::Type* type) const;
         bool IsSafeTypeCastPossible(llvm::Value* value, llvm::Type* desiredType) const;
         llvm::Type* ResolveType(ExpressionType type, const GeneratedScope& scope) const;
         llvm::Value* GenerateSafeTypeCast(llvm::Value* value, llvm::Type* desiredType) const;
