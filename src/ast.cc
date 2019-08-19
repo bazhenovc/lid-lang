@@ -789,24 +789,34 @@ namespace AST
                "Function has no overloads");
 
         // Pick default overload
-        llvm::Value* selectedValue = generatedValue.Values[0];
+        llvm::Value* selectedValue = nullptr;
 
         // Find compatible overload
         for (size_t i = 0; i < generatedValue.NumValues; ++i) {
-            selectedValue = generatedValue.Values[i];
-            llvm::Type* valueType = selectedValue->getType();
+            llvm::Value* value = generatedValue.Values[i];
+            llvm::Type* valueType = value->getType();
 
             bool isFunction = valueType->isPointerTy() && valueType->getPointerElementType()->isFunctionTy();
             Assert(isFunction, "Function expected");
 
             llvm::FunctionType* functionType = static_cast<llvm::FunctionType*>(valueType->getPointerElementType());
             if (functionType->getNumParams() == argumentTypes.size()) {
+                bool argumentsMatch = true;
                 for (size_t argumentIndex = 0; argumentIndex < argumentTypes.size(); ++argumentIndex) {
                     llvm::Type* argumentType = *(functionType->param_begin() + argumentIndex);
                     if (!IsSafeTypeCastPossible(argumentValues[argumentIndex], argumentType)) {
-                        selectedValue = nullptr;
+                        argumentsMatch = false;
                         break;
                     }
+                }
+
+                if (argumentsMatch) {
+                    if (selectedValue != nullptr) {
+                        std::string errorMessage = llvm::formatv("Ambiguous function overload for call to \"{0}\"",
+                                                                 ToLLVM(FunctionExpr->ParseContext.Source));
+                        Assert(false, errorMessage);
+                    }
+                    selectedValue = value;
                 }
             }
         }
@@ -834,7 +844,7 @@ namespace AST
                 candidates += "( ";
                 for (llvm::Type* type: functionType->params()) {
                     candidates += GetTypeName(type);
-                    candidates +=  + " ";
+                    candidates += " ";
                 }
                 candidates += ")\n";
             }
@@ -1370,27 +1380,58 @@ namespace AST
                "Duplicated struct name");
         cc.Scope.Types.insert(std::make_pair(ParseContext.Source, structType));
 
-        // Create constructor
-        llvm::FunctionType* functionType = llvm::FunctionType::get(structType, memberTypes, false);
-        llvm::Function* functionValue = llvm::Function::Create(functionType, llvm::Function::InternalLinkage,
-                                                               ToLLVM(ParseContext.Source), cc.Module);
+        // Create default constructor
+        {
+            llvm::FunctionType* functionType = llvm::FunctionType::get(structType, false);
+            llvm::Function* functionValue = llvm::Function::Create(functionType, llvm::Function::InternalLinkage,
+                                                                   ToLLVM(ParseContext.Source), cc.Module);
 
-        llvm::BasicBlock* block = llvm::BasicBlock::Create(*cc.Context, "__funcbody", functionValue);
-        cc.Builder->SetInsertPoint(block);
+            llvm::BasicBlock* block = llvm::BasicBlock::Create(*cc.Context, "__funcbody", functionValue);
+            cc.Builder->SetInsertPoint(block);
 
-        llvm::Value* structAlloc = cc.Builder->CreateAlloca(structType);
-        for (size_t i = 0; i < memberTypes.size(); ++i) {
-            llvm::Value* memberPtr = cc.Builder->CreateStructGEP(structAlloc, unsigned(i));
-            cc.Builder->CreateStore(functionValue->arg_begin() + i, memberPtr);
+            llvm::Value* structAlloc = cc.Builder->CreateAlloca(structType);
+            for (size_t i = 0; i < memberTypes.size(); ++i) {
+                if (Members[i].DefaultValue != nullptr) {
+                    llvm::Value* memberPtr = cc.Builder->CreateStructGEP(structAlloc, unsigned(i));
+
+                    CodeGenResult generatedDefaultValue = Members[i].DefaultValue->Generate(cc);
+                    Assert(generatedDefaultValue.NumValues == 1,
+                           "Using overloaded values for default member values is not supported(yet)");
+
+                    llvm::Value* defaultValue = GenerateSafeTypeCast(generatedDefaultValue.Values[0], memberTypes[i]);
+                    cc.Builder->CreateStore(defaultValue, memberPtr);
+                }
+            }
+
+            llvm::Value* structLoad = cc.Builder->CreateLoad(structAlloc);
+            cc.Builder->CreateRet(structLoad);
+
+            LocalValues.emplace_back(functionValue);
         }
-        llvm::Value* structLoad = cc.Builder->CreateLoad(structAlloc);
-        cc.Builder->CreateRet(structLoad);
 
-        LocalValue = functionValue;
-        CodeGenResult generatedFunctionValue(&LocalValue);
+        // Create constructor with parameters for each member
+        {
+            llvm::FunctionType* functionType = llvm::FunctionType::get(structType, memberTypes, false);
+            llvm::Function* functionValue = llvm::Function::Create(functionType, llvm::Function::InternalLinkage,
+                                                                   ToLLVM(ParseContext.Source), cc.Module);
+
+            llvm::BasicBlock* block = llvm::BasicBlock::Create(*cc.Context, "__funcbody", functionValue);
+            cc.Builder->SetInsertPoint(block);
+
+            llvm::Value* structAlloc = cc.Builder->CreateAlloca(structType);
+            for (size_t i = 0; i < memberTypes.size(); ++i) {
+                llvm::Value* memberPtr = cc.Builder->CreateStructGEP(structAlloc, unsigned(i));
+                cc.Builder->CreateStore(functionValue->arg_begin() + i, memberPtr);
+            }
+            llvm::Value* structLoad = cc.Builder->CreateLoad(structAlloc);
+            cc.Builder->CreateRet(structLoad);
+
+            LocalValues.emplace_back(functionValue);
+        }
+
+        CodeGenResult generatedFunctionValue(LocalValues);
 
         cc.Scope.Bindings.insert(std::make_pair(ParseContext.Source, generatedFunctionValue));
         return generatedFunctionValue;
-        //return structType;
     }
 }

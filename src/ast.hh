@@ -348,8 +348,7 @@ namespace AST
         };
 
         std::vector<Member> Members;
-
-        llvm::Value* LocalValue;
+        std::vector<llvm::Value*> LocalValues;
 
         StructExpression(SourceParseContext parseContext,
                          std::vector<Member>&& members);

@@ -27,9 +27,11 @@ extern function sinf(:f32): f32
 extern function cosf(:f32): f32
 extern function puts(:&u8): i32
 
+// Constants
 const StringConstant = "This is a string constant"
 const FloatConstant = 3.14
 
+// Functions
 const NamedLambda = function(): f32 {
     FloatConstant + 2
 }
@@ -38,6 +40,7 @@ function GetFloat(): f32 {
     FloatConstant
 }
 
+// Lambdas
 function TestLambda(:i128): f32 {
     (function(): f32 {
         (function(rootValue: f32): f32 {
@@ -60,6 +63,7 @@ function TestLambdaAsArgument(): void {
     })
 }
 
+// Scopes
 function TestScope(): u32 {
     let x = 42 {
         (function(): u32 {
@@ -90,6 +94,7 @@ function TestScopeMutable(): void {
     }
 }
 
+// Branches
 function TestIf(): void {
     if 0 {
         puts("If failed")
@@ -109,6 +114,7 @@ function TestIfElse(): void {
     }
 }
 
+// Binary operators
 function TestIntegerBinaryOperators(): void {
     puts("Testing integer binary operators")
     if (5 == 5)         { puts("5 equals 5") }                 else { puts("integer equality operator failed") }
@@ -147,6 +153,7 @@ function TestBinaryOperatorPrecedence(): void {
     }
 }
 
+// Type cast
 function TestTypeCast(): void {
     let typedConstant: i8 = 255 {
         if typedConstant == -127 {
@@ -157,6 +164,7 @@ function TestTypeCast(): void {
     }
 }
 
+// Loops
 function TestForLoop(): void {
     let loopResult = for (x: i16 = 0; x < 4; x + 1) { puts("Loop iteration") x } {
         if (loopResult == 3) {
@@ -167,8 +175,9 @@ function TestForLoop(): void {
     }
 }
 
+// Structures
 struct Vector3i {
-    x: i32 = 0      // TODO: Default initializers are not implemented
+    x: i32 = 0
     y: i32 = 0
     z: i32 = 0
 }
@@ -223,6 +232,17 @@ function TestNestedStruct(): void {
     }
 }
 
+struct DefaultValuesTest {
+    vec: Vector3i = Vector3i(1, 2, 3)
+}
+
+function TestStructDefaultValues() {
+    let test = DefaultValuesTest() {
+        if test.vec.x == 1 && test.vec.y == 2 && test.vec.z == 3 { puts("Struct default values test passed") }
+        else                                                     { puts("Struct default values test failed") }
+    }
+}
+
 // Function overloading
 function OverloadedFunction(:i32): i32 {
     puts("Wrong overloaded function")
@@ -265,6 +285,7 @@ function main(): i32 {
     TestForLoop()
     TestStructMembers()
     TestNestedStruct()
+    TestStructDefaultValues()
     TestFunctionOverload()
 
     let x = rand() {
