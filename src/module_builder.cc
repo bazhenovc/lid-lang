@@ -38,24 +38,24 @@ ModuleBuilder::CodeGenResult ModuleBuilder::ParseAndGenerate(std::string_view in
     Module = std::make_unique<llvm::Module>(ToLLVM(inFile), *LLVMContext);
     Builder = std::make_unique<llvm::IRBuilder<>>(*LLVMContext);
 
-    AST::GeneratedScope rootScope;
-    rootScope.Types.insert(std::make_pair("void", llvm::Type::getVoidTy(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("boolean", llvm::Type::getInt1Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("f16", llvm::Type::getHalfTy(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("f32", llvm::Type::getFloatTy(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("f64", llvm::Type::getDoubleTy(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("f128", llvm::Type::getFP128Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("i8", llvm::Type::getInt8Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("i16", llvm::Type::getInt16Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("i32", llvm::Type::getInt32Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("i64", llvm::Type::getInt64Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("i128", llvm::Type::getInt128Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("u8", llvm::Type::getInt8Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("u16", llvm::Type::getInt16Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("u32", llvm::Type::getInt32Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("u64", llvm::Type::getInt64Ty(*LLVMContext)));
-    rootScope.Types.insert(std::make_pair("u128", llvm::Type::getInt128Ty(*LLVMContext)));
-    rootScope.RootBlock = llvm::BasicBlock::Create(*LLVMContext, "__module_main");
+    AST::GeneratedScope generatedRootScope;
+    generatedRootScope.Types.insert(std::make_pair("void", llvm::Type::getVoidTy(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("boolean", llvm::Type::getInt1Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("f16", llvm::Type::getHalfTy(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("f32", llvm::Type::getFloatTy(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("f64", llvm::Type::getDoubleTy(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("f128", llvm::Type::getFP128Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("i8", llvm::Type::getInt8Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("i16", llvm::Type::getInt16Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("i32", llvm::Type::getInt32Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("i64", llvm::Type::getInt64Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("i128", llvm::Type::getInt128Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("u8", llvm::Type::getInt8Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("u16", llvm::Type::getInt16Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("u32", llvm::Type::getInt32Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("u64", llvm::Type::getInt64Ty(*LLVMContext)));
+    generatedRootScope.Types.insert(std::make_pair("u128", llvm::Type::getInt128Ty(*LLVMContext)));
+    generatedRootScope.RootBlock = llvm::BasicBlock::Create(*LLVMContext, "__module_main");
 
     visitProgram(context);
 
@@ -67,7 +67,7 @@ ModuleBuilder::CodeGenResult ModuleBuilder::ParseAndGenerate(std::string_view in
 
     // Generate code
     AST::CodeGenContext codeGenContext = {
-        rootScope,
+        generatedRootScope,
         Builder.get(),
         Module.get(),
         LLVMContext,
@@ -79,13 +79,13 @@ ModuleBuilder::CodeGenResult ModuleBuilder::ParseAndGenerate(std::string_view in
     }
 
     for (auto& scopeItem: RootScope.Bindings) {
-        assert(rootScope.Bindings.find(scopeItem.first) == rootScope.Bindings.end()
+        assert(generatedRootScope.Bindings.find(scopeItem.first) == generatedRootScope.Bindings.end()
                && "Conflicting binding name in global scope");
 
         //scopeItem.second->DebugPrint(0);
 
-        llvm::Value* value = scopeItem.second->Generate(codeGenContext);
-        rootScope.Bindings.insert(rootScope.Bindings.end(), std::make_pair(scopeItem.first, value));
+        AST::CodeGenResult value = scopeItem.second->Generate(codeGenContext);
+        generatedRootScope.Bindings.insert(generatedRootScope.Bindings.end(), std::make_pair(scopeItem.first, value));
     }
 
     return {
@@ -124,7 +124,16 @@ antlrcpp::Any ModuleBuilder::visitNamedFunction(lidParser::NamedFunctionContext 
 {
     AST::SourceParseContext parseContext = { CopyString(context->IDENTIFIER()), context->getStart()->getLine() };
 
-    AST::ExpressionType functionReturnType = visitTypeName(context->typeName()).as<AST::ExpressionType>();
+    lidParser::TypeNameContext* returnTypeName = context->typeName();
+    AST::ExpressionType functionReturnType;
+    if (returnTypeName != nullptr) {
+        functionReturnType = visitTypeName(context->typeName()).as<AST::ExpressionType>();
+    } else {
+        // TODO: Type inference for function return type
+        functionReturnType.TypeName = "void";
+        functionReturnType.IsPointer = false;
+        functionReturnType.IsFunction = false;
+    }
 
     std::vector<std::string_view> functionArgNames;
     std::vector<AST::ExpressionType> functionArgTypes;
@@ -147,8 +156,22 @@ antlrcpp::Any ModuleBuilder::visitNamedFunction(lidParser::NamedFunctionContext 
     AST::BaseExpressionPtr functionDecl = std::make_unique<AST::FunctionExpression>(
                 parseContext, std::move(signature), std::move(functionBody));
 
-    // Add global binding
-    RootScope.Bindings.emplace_back(std::make_pair(parseContext.Source, std::move(functionDecl)));
+    // Add global binding (or append to existing one)
+    auto functionBinding = std::find_if(RootScope.Bindings.begin(), RootScope.Bindings.end(),
+        [&parseContext](auto& item) { return item.first == parseContext.Source; });
+
+    if (functionBinding == RootScope.Bindings.end()) {
+        RootScope.Bindings.emplace_back(std::make_pair(parseContext.Source, std::move(functionDecl)));
+    } else {
+        // TODO: Refactor without dynamic and static casts
+        auto* maybeFunction = dynamic_cast<AST::FunctionExpression*>(functionBinding->second.get());
+        if (maybeFunction != nullptr) {
+            std::unique_ptr<AST::FunctionExpression> functionPtr(static_cast<AST::FunctionExpression*>(functionDecl.release()));
+            maybeFunction->AddOverload(std::move(functionPtr));
+        } else {
+            assert(false && "Trying to overload something that is not a function");
+        }
+    }
     return AST::BaseExpressionPtr();
 }
 
