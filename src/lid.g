@@ -11,8 +11,8 @@ toplevel
     ;
 
 namedFunction
-    : 'function' IDENTIFIER '(' typedParameter? (',' typedParameter)* ')' typeName '{' expression* '}'
-    | 'extern' 'function' IDENTIFIER '(' typedParameter? (',' typedParameter)* ')' typeName
+    : 'function' IDENTIFIER '(' typedParameter? (',' typedParameter)* ')' typeName? '{' expression* '}'
+    | 'extern' 'function' IDENTIFIER '(' typedParameter? (',' typedParameter)* ')' typeName?
     ;
 
 namedConstant
